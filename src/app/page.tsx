@@ -48,8 +48,8 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 
 const MODELS = [
   { id: 'Qwen/Qwen2-7B-Instruct', name: 'Qwen2-7B' },
-  { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
-  { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek 定制' },
+  { id: 'alibaba/Qwen1.5-7B-Chat', name: 'Qwen1.5-7B' },
+  { id: 'deepseek-ai/deepseek-v2', name: 'DeepSeek-V2' },
   { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' },
 ];
 

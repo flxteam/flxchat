@@ -7,6 +7,45 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
+const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
+  const [isCopied, setIsCopied] = useState(false);
+  const match = /language-(\w+)/.exec(className || '');
+  const codeText = String(children).replace(/\n$/, '');
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(codeText);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+
+  return !inline && match ? (
+    <div className="relative group">
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={match[1]}
+        PreTag="div"
+        {...props}
+      >
+        {codeText}
+      </SyntaxHighlighter>
+      <button 
+        onClick={handleCopy}
+        className="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      >
+        {isCopied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  ) : (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -133,44 +172,7 @@ export default function Home() {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      code({ node, inline, className, children, ...props }) {
-                        const [isCopied, setIsCopied] = useState(false);
-                        const match = /language-(\w+)/.exec(className || '');
-                        const codeText = String(children).replace(/\n$/, '');
-
-                        const handleCopy = async () => {
-                          try {
-                            await navigator.clipboard.writeText(codeText);
-                            setIsCopied(true);
-                            setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
-                          } catch (err) {
-                            console.error('Failed to copy text: ', err);
-                          }
-                        };
-
-                        return !inline && match ? (
-                          <div className="relative group">
-                            <SyntaxHighlighter
-                              style={vscDarkPlus}
-                              language={match[1]}
-                              PreTag="div"
-                              {...props}
-                            >
-                              {codeText}
-                            </SyntaxHighlighter>
-                            <button 
-                              onClick={handleCopy}
-                              className="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                            >
-                              {isCopied ? 'Copied!' : 'Copy'}
-                            </button>
-                          </div>
-                        ) : (
-                          <code className={className} {...props}>
-                            {children}
-                          </code>
-                        );
-                      }
+                      code: CodeBlock
                     }}
                   >
                     {message.content}

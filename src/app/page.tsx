@@ -36,7 +36,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
         onClick={handleCopy}
         className="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
       >
-        {isCopied ? 'Copied!' : 'Copy'}
+        {isCopied ? '已复制!' : '复制'}
       </button>
     </div>
   ) : (
@@ -48,8 +48,8 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 
 const MODELS = [
   { id: 'Qwen/Qwen2-7B-Instruct', name: 'Qwen2-7B' },
-  { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B' },
-  { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek Custom' },
+  { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
+  { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek 定制' },
   { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' },
 ];
 
@@ -178,7 +178,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error(error);
-      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: 'Sorry, something went wrong. Please try again.' }]);
+      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: '抱歉，出错了。请重试。' }]);
     } finally {
       setIsLoading(false);
     }
@@ -187,7 +187,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
       <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
-        <h1 className="text-xl font-bold">FLX Chat</h1>
+        <h1 className="text-xl font-bold">FLX 聊天</h1>
         <div className="flex items-center gap-4">
           <div className="relative">
             <select
@@ -207,7 +207,7 @@ export default function Home() {
             onClick={handleNewChat}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
           >
-            New Chat
+            新对话
           </button>
         </div>
       </header>
@@ -244,7 +244,7 @@ export default function Home() {
       <footer className="bg-gray-800 p-4">
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
           <textarea
-            placeholder="System Prompt (optional) - Tell the AI how to behave"
+            placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             disabled={isLoading}
@@ -254,7 +254,7 @@ export default function Home() {
           <div className="flex items-center">
             <input
               type="text"
-              placeholder="Ask me anything..."
+              placeholder="输入你的消息..."
               value={input}
               onChange={handleInputChange}
               disabled={isLoading}
@@ -265,7 +265,7 @@ export default function Home() {
               disabled={isLoading || !input.trim()}
               className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
             >
-              {isLoading ? '...' : 'Send'}
+              {isLoading ? '...' : '发送'}
             </button>
           </div>
         </form>

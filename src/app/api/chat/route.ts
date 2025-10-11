@@ -118,12 +118,24 @@ export async function POST(req: NextRequest) {
                 }),
             });
         } else {
-            // If no tool call, we need to convert the non-streamed response back to a stream
+            // If no tool call, convert the non-streamed response back to a proper stream format
             const stream = new ReadableStream({
                 start(controller) {
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(responseData)}\n\n`));
-                    controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-                    controller.close();
+                    try {
+                        // Simulate the streaming format that the frontend expects
+                        const content = responseData.choices?.[0]?.message?.content || '';
+                        // Send content chunk by chunk if you want to simulate typing
+                        const chunk = {
+                            choices: [
+                                { delta: { content: content } }
+                            ]
+                        };
+                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
+                        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+                        controller.close();
+                    } catch (e) {
+                        controller.error(e);
+                    }
                 }
             });
             return new Response(stream, {

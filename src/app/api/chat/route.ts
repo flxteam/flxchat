@@ -52,11 +52,11 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Messages are required', { status: 400 });
   }
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const apiBase = 'https://openrouter.ai/api/v1'; // Correct API base for OpenRouter
+  const apiKey = process.env.SILICONFLOW_API_KEY;
+  const apiBase = 'https://api.siliconflow.cn/v1'; // Correct API base for SiliconFlow
 
   if (!apiKey) {
-    console.error('Missing environment variable: OPENROUTER_API_KEY');
+    console.error('Missing environment variable: SILICONFLOW_API_KEY');
     return new NextResponse('API configuration is missing on the server.', { status: 500 });
   }
 
@@ -143,8 +143,8 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenRouter API error:', errorText);
-      return new Response(JSON.stringify({ error: 'OpenRouter API error', details: errorText }), {
+      console.error('SiliconFlow API error:', errorText);
+      return new Response(JSON.stringify({ error: 'SiliconFlow API error', details: errorText }), {
         status: response.status,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error calling OpenRouter API:', error);
+    console.error('Error calling SiliconFlow API:', error);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

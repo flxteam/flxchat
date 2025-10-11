@@ -49,7 +49,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 const MODELS = [
   { id: 'Qwen/Qwen2-7B-Instruct', name: 'Qwen2-7B' },
   { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B' },
-  { id: 'deepseek-ai/DeepSeek-V2-Chat', name: 'DeepSeek-V2' },
+  { id: 'deepseek-ai/deepseek-chat', name: 'DeepSeek Chat' },
   { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' },
 ];
 

@@ -93,6 +93,15 @@ export default function Home() {
     setInput(e.target.value);
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    try {
+      localStorage.removeItem('chatHistory');
+    } catch (error) {
+      console.error("Failed to clear chat history from localStorage", error);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -102,6 +111,7 @@ export default function Home() {
       content: input,
     };
 
+    // If it's a new chat, prepend the system prompt before the first user message
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
@@ -165,8 +175,14 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      <header className="bg-gray-800 shadow-md p-4">
-        <h1 className="text-xl font-bold text-center">FLX Chat</h1>
+      <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold">FLX Chat</h1>
+        <button 
+          onClick={handleNewChat}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
+        >
+          New Chat
+        </button>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">

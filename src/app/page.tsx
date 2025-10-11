@@ -209,7 +209,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
       <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
-        <h1 className="text-xl font-bold">FLX 聊天</h1>
+        <h1 className="text-xl font-bold">FLXChat</h1>
         <div className="flex items-center gap-4">
           <div className="relative">
             <select

@@ -4,7 +4,8 @@ export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
     const body = await req.json();
-    const { messages, systemPrompt } = body;
+    // Use the modelId from the request, or fall back to the environment variable
+    const { messages, systemPrompt, modelId: requestModelId } = body;
 
     if (!messages) {
         return new NextResponse('Messages are required', { status: 400 });
@@ -12,12 +13,14 @@ export async function POST(req: NextRequest) {
 
     const apiKey = process.env.SILICONFLOW_API_KEY;
     const apiBase = process.env.SILICONFLOW_API_BASE;
-    const modelId = process.env.SILICONFLOW_MODEL_ID;
+    const defaultModelId = process.env.SILICONFLOW_MODEL_ID;
 
-    if (!apiKey || !apiBase || !modelId) {
+    if (!apiKey || !apiBase || !defaultModelId) {
         console.error('Missing environment variables: SILICONFLOW_API_KEY, SILICONFLOW_API_BASE, or SILICONFLOW_MODEL_ID');
         return new NextResponse('API configuration is missing on the server.', { status: 500 });
     }
+
+    const modelToUse = requestModelId || defaultModelId;
 
     // Add the system prompt to the beginning of the messages array
     const messagesWithPrompt = [...messages];
@@ -33,8 +36,8 @@ export async function POST(req: NextRequest) {
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: modelId,
-                messages: messagesWithPrompt, // Use the array with the system prompt
+                model: modelToUse, // Use the selected model
+                messages: messagesWithPrompt,
                 stream: true,
             })
         });

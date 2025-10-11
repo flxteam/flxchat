@@ -46,10 +46,18 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   );
 };
 
+const MODELS = [
+  { id: 'Qwen/Qwen2-7B-Instruct', name: 'Qwen2-7B' },
+  { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B' },
+  { id: 'deepseek-ai/DeepSeek-V2-Chat', name: 'DeepSeek-V2' },
+  { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' },
+];
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
+  const [modelId, setModelId] = useState(MODELS[0].id); // Default model
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -57,7 +65,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Load messages and prompt from localStorage on initial render
+  // Load state from localStorage on initial render
   useEffect(() => {
     try {
       const storedMessages = localStorage.getItem('chatHistory');
@@ -68,22 +76,27 @@ export default function Home() {
       if (storedPrompt) {
         setSystemPrompt(storedPrompt);
       }
+      const storedModelId = localStorage.getItem('modelId');
+      if (storedModelId && MODELS.some(m => m.id === storedModelId)) {
+        setModelId(storedModelId);
+      }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
   }, []);
 
-  // Save messages and prompt to localStorage whenever they change
+  // Save state to localStorage whenever they change
   useEffect(() => {
     try {
       if (messages.length > 0) {
         localStorage.setItem('chatHistory', JSON.stringify(messages));
       }
       localStorage.setItem('systemPrompt', systemPrompt);
+      localStorage.setItem('modelId', modelId);
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [messages, systemPrompt]);
+  }, [messages, systemPrompt, modelId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -111,7 +124,6 @@ export default function Home() {
       content: input,
     };
 
-    // If it's a new chat, prepend the system prompt before the first user message
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput('');
@@ -123,7 +135,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages: newMessages, systemPrompt }), // Send the whole conversation
+        body: JSON.stringify({ messages: newMessages, systemPrompt, modelId }), // Send modelId to backend
       });
 
       if (!response.ok || !response.body) {
@@ -134,7 +146,6 @@ export default function Home() {
       const decoder = new TextDecoder();
       let aiResponse = '';
       
-      // Add a placeholder for the AI response
       setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: '' }]);
 
       while (true) {
@@ -175,14 +186,30 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
-      <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center">
+      <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
         <h1 className="text-xl font-bold">FLX Chat</h1>
-        <button 
-          onClick={handleNewChat}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm"
-        >
-          New Chat
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <select
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
+            >
+              {MODELS.map((model) => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+            </div>
+          </div>
+          <button 
+            onClick={handleNewChat}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
+          >
+            New Chat
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">

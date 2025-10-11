@@ -74,7 +74,6 @@ export async function POST(req: NextRequest) {
   // Add tools if search is enabled
   if (useSearch) {
     requestBody.tools = [searchTool];
-    requestBody.stream = false; // First request is not streamed to check for tool calls
   }
 
   try {
@@ -87,8 +86,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(requestBody),
     });
 
-    // Check for tool calls if search is enabled
-    if (useSearch) {
+    // Initial response might be a tool call
+    if (response.headers.get('Content-Type')?.includes('application/json')) {
         const responseData = await response.json();
         const toolCall = responseData.choices?.[0]?.message?.tool_calls?.[0];
 
@@ -104,7 +103,7 @@ export async function POST(req: NextRequest) {
                 content: searchResult,
             });
 
-            // Make a second call with the search result, this time streamed
+            // Make a second call with the search result
             response = await fetch(`${apiBase}/chat/completions`, {
                 method: 'POST',
                 headers: {
@@ -116,30 +115,6 @@ export async function POST(req: NextRequest) {
                     messages: messagesWithPrompt,
                     stream: true, // Get the final answer as a stream
                 }),
-            });
-        } else {
-            // If no tool call, convert the non-streamed response back to a proper stream format
-            const stream = new ReadableStream({
-                start(controller) {
-                    try {
-                        // Simulate the streaming format that the frontend expects
-                        const content = responseData.choices?.[0]?.message?.content || '';
-                        // Send content chunk by chunk if you want to simulate typing
-                        const chunk = {
-                            choices: [
-                                { delta: { content: content } }
-                            ]
-                        };
-                        controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
-                        controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-                        controller.close();
-                    } catch (e) {
-                        controller.error(e);
-                    }
-                }
-            });
-            return new Response(stream, {
-                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
             });
         }
     }

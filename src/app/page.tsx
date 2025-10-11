@@ -60,8 +60,9 @@ export default function Home() {
   const [modelId, setModelId] = useState(MODELS[0].id); // Default model
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [useSearch, setUseSearch] = useState(false); // Add state for search
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isPromptVisible, setIsPromptVisible] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -134,7 +135,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `你必须使用中文进行思考，并用中文回答问题。请一步一步思考，然后回答问题。问题： ${input}`;
+      finalInput = `请一步一步思考，然后回答问题。问题： ${input}`;
     }
 
     const userMessage: Message = {
@@ -265,26 +266,7 @@ export default function Home() {
       </main>
 
       <footer className="bg-gray-800 p-4">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <button 
-              type="button"
-              onClick={() => setIsPromptVisible(!isPromptVisible)}
-              className="text-sm text-gray-400 hover:text-gray-200 focus:outline-none"
-            >
-              {isPromptVisible ? '收起提示词' : '自定义提示词'}
-            </button>
-          </div>
-          {isPromptVisible && (
-            <textarea
-              placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              disabled={isLoading}
-              className="w-full p-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none disabled:opacity-50 transition-all duration-300"
-              rows={2}
-            />
-          )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div className="flex items-center justify-between text-sm text-gray-400">
             <div className="flex items-center gap-6">
               <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer">
@@ -310,6 +292,16 @@ export default function Home() {
                 <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
               </label>
             </div>
+            <button 
+              type="button"
+              onClick={() => {
+                setModalSystemPrompt(systemPrompt);
+                setIsPromptModalOpen(true);
+              }}
+              className="text-sm text-gray-400 hover:text-white hover:bg-gray-700 py-1 px-3 rounded-lg"
+            >
+              自定义提示词
+            </button>
           </div>
           <div className="flex items-center">
             <input
@@ -330,6 +322,47 @@ export default function Home() {
           </div>
         </form>
       </footer>
+
+      {isPromptModalOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={() => setIsPromptModalOpen(false)}
+        >
+          <div 
+            className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-lg font-bold mb-4">自定义系统提示词</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              在这里输入你的指令，让 AI 扮演特定角色或遵循特定规则。例如：“你是一个翻译专家，请将我发送的所有内容翻译成英文。”
+            </p>
+            <textarea
+              placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
+              value={modalSystemPrompt}
+              onChange={(e) => setModalSystemPrompt(e.target.value)}
+              className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-y"
+              rows={8}
+            />
+            <div className="flex justify-end gap-4 mt-4">
+              <button 
+                onClick={() => setIsPromptModalOpen(false)}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg"
+              >
+                取消
+              </button>
+              <button 
+                onClick={() => {
+                  setSystemPrompt(modalSystemPrompt);
+                  setIsPromptModalOpen(false);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

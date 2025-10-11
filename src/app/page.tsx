@@ -57,47 +57,39 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [modelId, setModelId] = useState(MODELS[0].id); // Default model
+  const [modelId, setModelId] = useState(MODELS[0].id);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
-  const [useSearch, setUseSearch] = useState(false); // Add state for search
+  const [useSearch, setUseSearch] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Load state from localStorage on initial render
   useEffect(() => {
     try {
       const storedMessages = localStorage.getItem('chatHistory');
-      if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
-      }
+      if (storedMessages) setMessages(JSON.parse(storedMessages));
+      
       const storedPrompt = localStorage.getItem('systemPrompt');
-      if (storedPrompt) {
-        setSystemPrompt(storedPrompt);
-      }
+      if (storedPrompt) setSystemPrompt(storedPrompt);
+
       const storedModelId = localStorage.getItem('modelId');
-      if (storedModelId && MODELS.some(m => m.id === storedModelId)) {
-        setModelId(storedModelId);
-      }
+      if (storedModelId && MODELS.some(m => m.id === storedModelId)) setModelId(storedModelId);
+
       const storedThinkingMode = localStorage.getItem('useThinkingMode');
-      if (storedThinkingMode) {
-        setUseThinkingMode(JSON.parse(storedThinkingMode));
-      }
+      if (storedThinkingMode) setUseThinkingMode(JSON.parse(storedThinkingMode));
+
       const storedUseSearch = localStorage.getItem('useSearch');
-      if (storedUseSearch) {
-        setUseSearch(JSON.parse(storedUseSearch));
-      }
+      if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
   }, []);
 
-  // Save state to localStorage whenever they change
   useEffect(() => {
     try {
       if (messages.length > 0) {
@@ -115,6 +107,20 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleOpenPromptModal = () => {
+    setModalSystemPrompt(systemPrompt);
+    setIsPromptModalOpen(true);
+  };
+
+  const handleClosePromptModal = () => {
+    setIsPromptModalOpen(false);
+  };
+
+  const handleSavePrompt = () => {
+    setSystemPrompt(modalSystemPrompt);
+    setIsPromptModalOpen(false);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
@@ -138,15 +144,8 @@ export default function Home() {
       finalInput = `请一步一步思考，然后回答问题。问题： ${input}`;
     }
 
-    const userMessage: Message = {
-      role: 'user',
-      content: finalInput,
-    };
-
-    const displayMessage: Message = {
-      role: 'user',
-      content: input, // Show original input in UI
-    };
+    const userMessage: Message = { role: 'user', content: finalInput };
+    const displayMessage: Message = { role: 'user', content: input };
 
     const newMessages = [...messages, displayMessage];
     setMessages(newMessages);
@@ -156,10 +155,8 @@ export default function Home() {
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: [...messages, userMessage], systemPrompt, modelId, useSearch }), // Send search status to backend
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [...messages, userMessage], systemPrompt, modelId, useSearch }),
       });
 
       if (!response.ok || !response.body) {
@@ -174,17 +171,14 @@ export default function Home() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
+        if (done) break;
+        
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n\n');
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = line.substring(6);
-            if (data.trim() === '[DONE]') {
-              break;
-            }
+            if (data.trim() === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
               const content = parsed.choices[0]?.delta?.content || '';
@@ -209,7 +203,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="relative flex flex-col h-screen bg-gray-900 text-white">
       <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
         <h1 className="text-xl font-bold">FLXChat</h1>
         <div className="flex items-center gap-4">
@@ -244,9 +238,7 @@ export default function Home() {
                 <div className="prose prose-invert max-w-none">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
-                    components={{
-                      code: CodeBlock
-                    }}
+                    components={{ code: CodeBlock }}
                   >
                     {message.content}
                   </ReactMarkdown>
@@ -270,35 +262,21 @@ export default function Home() {
           <div className="flex items-center justify-between text-sm text-gray-400">
             <div className="flex items-center gap-6">
               <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer">
-                <input
-                  id="thinking-mode"
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={useThinkingMode}
-                  onChange={(e) => setUseThinkingMode(e.target.checked)}
-                />
-                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} />
+                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 <span className="ms-3 text-sm font-medium text-gray-300">思考模式</span>
               </label>
               <label htmlFor="search-mode" className="inline-flex items-center cursor-pointer">
-                <input
-                  id="search-mode"
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={useSearch}
-                  onChange={(e) => setUseSearch(e.target.checked)}
-                />
-                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <input id="search-mode" type="checkbox" className="sr-only peer" checked={useSearch} onChange={(e) => setUseSearch(e.target.checked)} />
+                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
               </label>
             </div>
-            <button 
+            <button
               type="button"
-              onClick={() => {
-                setModalSystemPrompt(systemPrompt);
-                setIsPromptModalOpen(true);
-              }}
-              className="text-sm text-gray-400 hover:text-white hover:bg-gray-700 py-1 px-3 rounded-lg"
+              onClick={handleOpenPromptModal}
+              disabled={isLoading}
+              className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap disabled:opacity-50"
             >
               自定义提示词
             </button>
@@ -324,38 +302,26 @@ export default function Home() {
       </footer>
 
       {isPromptModalOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => setIsPromptModalOpen(false)}
-        >
-          <div 
-            className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-bold mb-4">自定义系统提示词</h2>
-            <p className="text-sm text-gray-400 mb-4">
-              在这里输入你的指令，让 AI 扮演特定角色或遵循特定规则。例如：“你是一个翻译专家，请将我发送的所有内容翻译成英文。”
-            </p>
+        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
+            <h2 className="text-xl font-bold mb-4">自定义系统提示词</h2>
             <textarea
-              placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
+              placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。"
               value={modalSystemPrompt}
               onChange={(e) => setModalSystemPrompt(e.target.value)}
-              className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-y"
-              rows={8}
+              className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-y"
+              rows={10}
             />
-            <div className="flex justify-end gap-4 mt-4">
-              <button 
-                onClick={() => setIsPromptModalOpen(false)}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white font-bold rounded-lg"
+            <div className="flex justify-end gap-4 mt-6">
+              <button
+                onClick={handleClosePromptModal}
+                className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
               >
                 取消
               </button>
-              <button 
-                onClick={() => {
-                  setSystemPrompt(modalSystemPrompt);
-                  setIsPromptModalOpen(false);
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg"
+              <button
+                onClick={handleSavePrompt}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
               >
                 保存
               </button>

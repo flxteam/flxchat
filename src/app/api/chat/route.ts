@@ -32,7 +32,8 @@ async function performSearch(query: string) {
       body: JSON.stringify({ q: query }),
     });
     if (!response.ok) {
-      throw new Error(`Serper API error: ${response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Serper API error: ${response.statusText}. Details: ${errorText}`);
     }
     const data = await response.json();
     // Extract relevant snippets or organic results
@@ -40,42 +41,42 @@ async function performSearch(query: string) {
     return snippets;
   } catch (error) {
     console.error('Search failed:', error);
-    return 'Search failed.';
+    throw new Error(`Search failed: ${(error as Error).message}`); // 抛出错误
   }
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { messages, systemPrompt, modelId, useSearch } = body;
-
-  if (!messages) {
-    return new NextResponse('Messages are required', { status: 400 });
-  }
-
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  const apiBase = 'https://openrouter.ai/api/v1';
-
-  if (!apiKey) {
-    console.error('Missing environment variable: OPENROUTER_API_KEY');
-    return new NextResponse('API configuration is missing on the server.', { status: 500 });
-  }
-
-  const messagesWithPrompt = [...messages];
-  if (systemPrompt) {
-    messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
-  }
-
-  const requestBody: any = {
-    model: modelId,
-    messages: messagesWithPrompt,
-    stream: true,
-  };
-
-  if (useSearch) {
-    requestBody.tools = [searchTool];
-  }
-
   try {
+    const body = await req.json();
+    const { messages, systemPrompt, modelId, useSearch } = body;
+
+    if (!messages) {
+      return new NextResponse('Messages are required', { status: 400 });
+    }
+
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    const apiBase = 'https://openrouter.ai/api/v1';
+
+    if (!apiKey) {
+      console.error('Missing environment variable: OPENROUTER_API_KEY');
+      return new NextResponse('API configuration is missing on the server.', { status: 500 });
+    }
+
+    const messagesWithPrompt = [...messages];
+    if (systemPrompt) {
+      messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
+    }
+
+    const requestBody: any = {
+      model: modelId,
+      messages: messagesWithPrompt,
+      stream: true,
+    };
+
+    if (useSearch) {
+      requestBody.tools = [searchTool];
+    }
+
     const initialResponse = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -162,9 +163,9 @@ export async function POST(req: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in chat API:', error);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+    return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message || 'Unknown error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

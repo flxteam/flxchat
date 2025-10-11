@@ -119,9 +119,18 @@ export async function POST(req: NextRequest) {
             });
         } else {
             // If no tool call, we need to convert the non-streamed response back to a stream
+            // that mimics the format of a real stream.
             const stream = new ReadableStream({
                 start(controller) {
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(responseData)}\n\n`));
+                    const content = responseData.choices?.[0]?.message?.content || '';
+                    const chunk = {
+                        choices: [{
+                            delta: { content: content },
+                            index: 0,
+                            finish_reason: responseData.choices?.[0]?.finish_reason
+                        }]
+                    };
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
                     controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
                     controller.close();
                 }

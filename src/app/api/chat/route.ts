@@ -2,84 +2,173 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
+// Define the search tool structure
+const searchTool = {
+  type: 'function',
+  function: {
+    name: 'search',
+    description: 'Search for information on the web.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'The search query.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+};
+
+async function performSearch(query: string) {
+  try {
+    const response = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': process.env.SERPER_API_KEY!,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ q: query }),
+    });
+    if (!response.ok) {
+      throw new Error(`Serper API error: ${response.statusText}`);
+    }
+    const data = await response.json();
+    // Extract relevant snippets or organic results
+    const snippets = data.organic?.map((r: any) => r.snippet).join('\n') || 'No results found.';
+    return snippets;
+  } catch (error) {
+    console.error('Search failed:', error);
+    return 'Search failed.';
+  }
+}
+
 export async function POST(req: NextRequest) {
-    const body = await req.json();
-    // Use the modelId from the request, or fall back to the environment variable
-    const { messages, systemPrompt, modelId: requestModelId } = body;
+  const body = await req.json();
+  const { messages, systemPrompt, modelId, useSearch } = body;
 
-    if (!messages) {
-        return new NextResponse('Messages are required', { status: 400 });
-    }
+  if (!messages) {
+    return new NextResponse('Messages are required', { status: 400 });
+  }
 
-    const apiKey = process.env.SILICONFLOW_API_KEY;
-    const apiBase = process.env.SILICONFLOW_API_BASE;
-    const defaultModelId = process.env.SILICONFLOW_MODEL_ID;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiBase = 'https://openrouter.ai/api/v1'; // Correct API base for OpenRouter
 
-    if (!apiKey || !apiBase || !defaultModelId) {
-        console.error('Missing environment variables: SILICONFLOW_API_KEY, SILICONFLOW_API_BASE, or SILICONFLOW_MODEL_ID');
-        return new NextResponse('API configuration is missing on the server.', { status: 500 });
-    }
+  if (!apiKey) {
+    console.error('Missing environment variable: OPENROUTER_API_KEY');
+    return new NextResponse('API configuration is missing on the server.', { status: 500 });
+  }
 
-    const modelToUse = requestModelId || defaultModelId;
+  const messagesWithPrompt = [...messages];
+  if (systemPrompt) {
+    messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
+  }
 
-    // Add the system prompt to the beginning of the messages array
-    const messagesWithPrompt = [...messages];
-    if (systemPrompt) {
-        messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
-    }
+  const requestBody: any = {
+    model: modelId,
+    messages: messagesWithPrompt,
+    stream: true,
+  };
 
-    try {
-        const response = await fetch(`${apiBase}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: modelToUse, // Use the selected model
-                messages: messagesWithPrompt,
-                stream: true,
-            })
-        });
+  // Add tools if search is enabled
+  if (useSearch) {
+    requestBody.tools = [searchTool];
+    requestBody.stream = false; // First request is not streamed to check for tool calls
+  }
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('SiliconFlow API error:', errorText);
-            return new Response(JSON.stringify({ error: 'SiliconFlow API error', details: errorText }), {
-                status: response.status,
-                headers: { 'Content-Type': 'application/json' }
+  try {
+    let response = await fetch(`${apiBase}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Check for tool calls if search is enabled
+    if (useSearch) {
+        const responseData = await response.json();
+        const toolCall = responseData.choices?.[0]?.message?.tool_calls?.[0];
+
+        if (toolCall && toolCall.function.name === 'search') {
+            const { query } = JSON.parse(toolCall.function.arguments);
+            const searchResult = await performSearch(query);
+
+            // Add tool call and result to messages
+            messagesWithPrompt.push(responseData.choices[0].message); // Add AI's tool request
+            messagesWithPrompt.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: searchResult,
+            });
+
+            // Make a second call with the search result, this time streamed
+            response = await fetch(`${apiBase}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: modelId,
+                    messages: messagesWithPrompt,
+                    stream: true, // Get the final answer as a stream
+                }),
+            });
+        } else {
+            // If no tool call, we need to convert the non-streamed response back to a stream
+            const stream = new ReadableStream({
+                start(controller) {
+                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(responseData)}\n\n`));
+                    controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+                    controller.close();
+                }
+            });
+            return new Response(stream, {
+                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
             });
         }
-
-        const stream = new ReadableStream({
-            async start(controller) {
-                if (!response.body) {
-                    controller.close();
-                    return;
-                }
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) {
-                        break;
-                    }
-                    controller.enqueue(value);
-                }
-                controller.close();
-            },
-        });
-
-        return new Response(stream, {
-            headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-        });
-
-    } catch (error) {
-        console.error('Error calling SiliconFlow API:', error);
-        return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
-            status: 500,
-            headers: { 'Content-Type': 'application/json' }
-        });
     }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenRouter API error:', errorText);
+      return new Response(JSON.stringify({ error: 'OpenRouter API error', details: errorText }), {
+        status: response.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        if (!response.body) {
+          controller.close();
+          return;
+        }
+        const reader = response.body.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+          controller.enqueue(value);
+        }
+        controller.close();
+      },
+    });
+
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+    });
+
+  } catch (error) {
+    console.error('Error calling OpenRouter API:', error);
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }

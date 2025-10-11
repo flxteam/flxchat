@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   const apiKey = process.env.OPENROUTER_API_KEY;
-  const apiBase = 'https://openrouter.ai/api/v1'; // Correct API base for OpenRouter
+  const apiBase = 'https://openrouter.ai/api/v1';
 
   if (!apiKey) {
     console.error('Missing environment variable: OPENROUTER_API_KEY');
@@ -71,13 +71,12 @@ export async function POST(req: NextRequest) {
     stream: true,
   };
 
-  // Add tools if search is enabled
   if (useSearch) {
     requestBody.tools = [searchTool];
   }
 
   try {
-    let response = await fetch(`${apiBase}/chat/completions`, {
+    const initialResponse = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -86,73 +85,85 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(requestBody),
     });
 
-    // Initial response might be a tool call
-    if (response.headers.get('Content-Type')?.includes('application/json')) {
-        const responseData = await response.json();
-        const toolCall = responseData.choices?.[0]?.message?.tool_calls?.[0];
-
-        if (toolCall && toolCall.function.name === 'search') {
-            const { query } = JSON.parse(toolCall.function.arguments);
-            const searchResult = await performSearch(query);
-
-            // Add tool call and result to messages
-            messagesWithPrompt.push(responseData.choices[0].message); // Add AI's tool request
-            messagesWithPrompt.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: searchResult,
-            });
-
-            // Make a second call with the search result
-            response = await fetch(`${apiBase}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model: modelId,
-                    messages: messagesWithPrompt,
-                    stream: true, // Get the final answer as a stream
-                }),
-            });
-        }
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenRouter API error:', errorText);
+    if (!initialResponse.ok) {
+      const errorText = await initialResponse.text();
+      console.error('OpenRouter API error (initial request):', errorText);
       return new Response(JSON.stringify({ error: 'OpenRouter API error', details: errorText }), {
-        status: response.status,
+        status: initialResponse.status,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const stream = new ReadableStream({
-      async start(controller) {
-        if (!response.body) {
-          controller.close();
-          return;
+    const contentType = initialResponse.headers.get('Content-Type') || '';
+
+    if (contentType.includes('application/json')) {
+      const responseData = await initialResponse.json();
+      const toolCall = responseData.choices?.[0]?.message?.tool_calls?.[0];
+
+      if (toolCall && toolCall.function.name === 'search') {
+        const { query } = JSON.parse(toolCall.function.arguments);
+        const searchResult = await performSearch(query);
+
+        messagesWithPrompt.push(responseData.choices[0].message);
+        messagesWithPrompt.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: searchResult,
+        });
+
+        const secondResponse = await fetch(`${apiBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: messagesWithPrompt,
+            stream: true,
+          }),
+        });
+
+        if (!secondResponse.ok) {
+          const errorText = await secondResponse.text();
+          console.error('OpenRouter API error (second request):', errorText);
+          return new Response(JSON.stringify({ error: 'OpenRouter API error on second call', details: errorText }), {
+            status: secondResponse.status,
+            headers: { 'Content-Type': 'application/json' },
+          });
         }
-        const reader = response.body.getReader();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-          controller.enqueue(value);
-        }
-        controller.close();
-      },
-    });
-
-    return new Response(stream, {
-      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-    });
-
+        
+        return new Response(secondResponse.body, {
+          headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+        });
+      } else {
+        const content = responseData.choices?.[0]?.message?.content || '';
+        const stream = new ReadableStream({
+          start(controller) {
+            const delta = { choices: [{ delta: { content } }] };
+            controller.enqueue(`data: ${JSON.stringify(delta)}\n\n`);
+            controller.enqueue(`data: [DONE]\n\n`);
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      }
+    } else if (contentType.includes('text/event-stream')) {
+      return new Response(initialResponse.body, {
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      });
+    } else {
+      const errorText = await initialResponse.text();
+      console.error('Unexpected Content-Type from OpenRouter:', contentType, errorText);
+      return new Response(JSON.stringify({ error: 'Unexpected response format from API.', details: errorText }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   } catch (error) {
-    console.error('Error calling OpenRouter API:', error);
+    console.error('Error in chat API:', error);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

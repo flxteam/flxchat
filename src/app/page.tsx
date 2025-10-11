@@ -274,26 +274,28 @@ export default function Home() {
             rows={2}
           />
           <div className="flex items-center justify-between text-sm text-gray-400">
-            <div className="flex items-center gap-4">
-              <label htmlFor="thinking-mode" className="flex items-center gap-2 cursor-pointer">
+            <div className="flex items-center gap-6">
+              <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer">
                 <input
-                  type="checkbox"
                   id="thinking-mode"
+                  type="checkbox"
+                  className="sr-only peer"
                   checked={useThinkingMode}
                   onChange={(e) => setUseThinkingMode(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
                 />
-                开启“思考模式”
+                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ms-3 text-sm font-medium text-gray-300">思考模式</span>
               </label>
-              <label htmlFor="search-mode" className="flex items-center gap-2 cursor-pointer">
+              <label htmlFor="search-mode" className="inline-flex items-center cursor-pointer">
                 <input
-                  type="checkbox"
                   id="search-mode"
+                  type="checkbox"
+                  className="sr-only peer"
                   checked={useSearch}
                   onChange={(e) => setUseSearch(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
                 />
-                开启“网络搜索”
+                <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
               </label>
             </div>
           </div>

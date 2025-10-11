@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Message } from '@/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -47,10 +48,10 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 };
 
 const MODELS = [
-  { id: 'Qwen/Qwen2-7B-Instruct', name: 'Qwen2-7B' },
-  { id: 'alibaba/Qwen1.5-7B-Chat', name: 'Qwen1.5-7B' },
-  { id: 'deepseek-ai/deepseek-v2', name: 'DeepSeek-V2' },
-  { id: 'THUDM/glm-4-9b-chat', name: 'GLM-4-9B' },
+  { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
+  { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
+  { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B8B', name: 'DeepSeek 定制' },
+  { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1-9B' },
 ];
 
 export default function Home() {
@@ -301,34 +302,42 @@ export default function Home() {
         </form>
       </footer>
 
-      {isPromptModalOpen && (
-        <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
-            <h2 className="text-xl font-bold mb-4">自定义系统提示词</h2>
-            <textarea
-              placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。"
-              value={modalSystemPrompt}
-              onChange={(e) => setModalSystemPrompt(e.target.value)}
-              className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-y"
-              rows={10}
-            />
-            <div className="flex justify-end gap-4 mt-6">
-              <button
-                onClick={handleClosePromptModal}
-                className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSavePrompt}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
-              >
-                保存
-              </button>
+      <AnimatePresence>
+        {isPromptModalOpen && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+          >
+            <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
+              <h2 className="text-xl font-bold mb-4">自定义系统提示词</h2>
+              <textarea
+                placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。"
+                value={modalSystemPrompt}
+                onChange={(e) => setModalSystemPrompt(e.target.value)}
+                className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-y"
+                rows={10}
+              />
+              <div className="flex justify-end gap-4 mt-6">
+                <button
+                  onClick={handleClosePromptModal}
+                  className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleSavePrompt}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+                >
+                  保存
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

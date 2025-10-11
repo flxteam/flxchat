@@ -133,7 +133,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `Please think step by step and then answer the question. Question: ${input}`;
+      finalInput = `请一步一步思考，然后回答问题。问题： ${input}`;
     }
 
     const userMessage: Message = {

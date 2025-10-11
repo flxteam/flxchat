@@ -59,6 +59,7 @@ export default function Home() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [modelId, setModelId] = useState(MODELS[0].id); // Default model
   const [useThinkingMode, setUseThinkingMode] = useState(false);
+  const [useSearch, setUseSearch] = useState(false); // Add state for search
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -85,6 +86,10 @@ export default function Home() {
       if (storedThinkingMode) {
         setUseThinkingMode(JSON.parse(storedThinkingMode));
       }
+      const storedUseSearch = localStorage.getItem('useSearch');
+      if (storedUseSearch) {
+        setUseSearch(JSON.parse(storedUseSearch));
+      }
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -99,10 +104,11 @@ export default function Home() {
       localStorage.setItem('systemPrompt', systemPrompt);
       localStorage.setItem('modelId', modelId);
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
+      localStorage.setItem('useSearch', JSON.stringify(useSearch));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [messages, systemPrompt, modelId, useThinkingMode]);
+  }, [messages, systemPrompt, modelId, useThinkingMode, useSearch]);
 
   useEffect(() => {
     scrollToBottom();
@@ -151,7 +157,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages: [...messages, userMessage], systemPrompt, modelId }), // Send modified message to backend
+        body: JSON.stringify({ messages: [...messages, userMessage], systemPrompt, modelId, useSearch }), // Send search status to backend
       });
 
       if (!response.ok || !response.body) {
@@ -268,16 +274,28 @@ export default function Home() {
             rows={2}
           />
           <div className="flex items-center justify-between text-sm text-gray-400">
-            <label htmlFor="thinking-mode" className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                id="thinking-mode"
-                checked={useThinkingMode}
-                onChange={(e) => setUseThinkingMode(e.target.checked)}
-                className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
-              />
-              开启“思考模式”
-            </label>
+            <div className="flex items-center gap-4">
+              <label htmlFor="thinking-mode" className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="thinking-mode"
+                  checked={useThinkingMode}
+                  onChange={(e) => setUseThinkingMode(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                开启“思考模式”
+              </label>
+              <label htmlFor="search-mode" className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="search-mode"
+                  checked={useSearch}
+                  onChange={(e) => setUseSearch(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                开启“网络搜索”
+              </label>
+            </div>
           </div>
           <div className="flex items-center">
             <input

@@ -133,7 +133,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步思考，然后回答问题。问题： ${input}`;
+      finalInput = `你必须使用中文进行思考，并用中文回答问题。请一步一步思考，然后回答问题。问题： ${input}`;
     }
 
     const userMessage: Message = {

@@ -61,6 +61,7 @@ export default function Home() {
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [useSearch, setUseSearch] = useState(false); // Add state for search
   const [isLoading, setIsLoading] = useState(false);
+  const [isPromptVisible, setIsPromptVisible] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -265,14 +266,25 @@ export default function Home() {
 
       <footer className="bg-gray-800 p-4">
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-          <textarea
-            placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            disabled={isLoading}
-            className="w-full p-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none disabled:opacity-50"
-            rows={2}
-          />
+          <div className="flex items-center justify-between">
+            <button 
+              type="button"
+              onClick={() => setIsPromptVisible(!isPromptVisible)}
+              className="text-sm text-gray-400 hover:text-gray-200 focus:outline-none"
+            >
+              {isPromptVisible ? '收起提示词' : '自定义提示词'}
+            </button>
+          </div>
+          {isPromptVisible && (
+            <textarea
+              placeholder="系统提示词 (可选) - 告诉 AI 如何表现"
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              disabled={isLoading}
+              className="w-full p-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none disabled:opacity-50 transition-all duration-300"
+              rows={2}
+            />
+          )}
           <div className="flex items-center justify-between text-sm text-gray-400">
             <div className="flex items-center gap-6">
               <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer">

@@ -4,7 +4,7 @@ export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
     const body = await req.json();
-    const { messages } = body;
+    const { messages, systemPrompt } = body;
 
     if (!messages) {
         return new NextResponse('Messages are required', { status: 400 });
@@ -19,6 +19,12 @@ export async function POST(req: NextRequest) {
         return new NextResponse('API configuration is missing on the server.', { status: 500 });
     }
 
+    // Add the system prompt to the beginning of the messages array
+    const messagesWithPrompt = [...messages];
+    if (systemPrompt) {
+        messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
+    }
+
     try {
         const response = await fetch(`${apiBase}/chat/completions`, {
             method: 'POST',
@@ -28,7 +34,7 @@ export async function POST(req: NextRequest) {
             },
             body: JSON.stringify({
                 model: modelId,
-                messages,
+                messages: messagesWithPrompt, // Use the array with the system prompt
                 stream: true,
             })
         });

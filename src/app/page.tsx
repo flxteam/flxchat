@@ -49,6 +49,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -56,28 +57,33 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Load messages from localStorage on initial render
+  // Load messages and prompt from localStorage on initial render
   useEffect(() => {
     try {
       const storedMessages = localStorage.getItem('chatHistory');
       if (storedMessages) {
         setMessages(JSON.parse(storedMessages));
       }
+      const storedPrompt = localStorage.getItem('systemPrompt');
+      if (storedPrompt) {
+        setSystemPrompt(storedPrompt);
+      }
     } catch (error) {
-      console.error("Failed to load messages from localStorage", error);
+      console.error("Failed to load from localStorage", error);
     }
   }, []);
 
-  // Save messages to localStorage whenever they change
+  // Save messages and prompt to localStorage whenever they change
   useEffect(() => {
     try {
       if (messages.length > 0) {
         localStorage.setItem('chatHistory', JSON.stringify(messages));
       }
+      localStorage.setItem('systemPrompt', systemPrompt);
     } catch (error) {
-      console.error("Failed to save messages to localStorage", error);
+      console.error("Failed to save to localStorage", error);
     }
-  }, [messages]);
+  }, [messages, systemPrompt]);
 
   useEffect(() => {
     scrollToBottom();
@@ -107,7 +113,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages: newMessages }), // Send the whole conversation
+        body: JSON.stringify({ messages: newMessages, systemPrompt }), // Send the whole conversation
       });
 
       if (!response.ok || !response.body) {
@@ -193,24 +199,32 @@ export default function Home() {
       </main>
 
       <footer className="bg-gray-800 p-4">
-        <form onSubmit={handleSubmit} className="flex items-center">
-          <input
-            type="text"
-            placeholder="Ask me anything..."
-            value={input}
-            onChange={handleInputChange}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          <textarea
+            placeholder="System Prompt (optional) - Tell the AI how to behave"
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
             disabled={isLoading}
-            className="flex-1 bg-gray-700 rounded-full py-2 px-4 focus:outline-none disabled:opacity-50"
+            className="w-full p-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none disabled:opacity-50"
+            rows={2}
           />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="ml-4 bg-blue-600 hover:bg-blue-700 rounded-full p-2 focus:outline-none disabled:bg-blue-400"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </button>
+          <div className="flex items-center">
+            <input
+              type="text"
+              placeholder="Ask me anything..."
+              value={input}
+              onChange={handleInputChange}
+              disabled={isLoading}
+              className="flex-1 p-3 bg-gray-700 rounded-l-lg focus:outline-none disabled:opacity-50"
+            />
+            <button 
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
+            >
+              {isLoading ? '...' : 'Send'}
+            </button>
+          </div>
         </form>
       </footer>
     </div>

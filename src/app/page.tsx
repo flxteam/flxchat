@@ -378,9 +378,10 @@ export default function Home() {
                 disabled={isLoading || !input.trim()}
                 className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
               >
-                {isLoading ? '...' : '发送'}
+                {isLoading ? '思考中...' : '发送'}
               </button>
             </div>
+            {isLoading && <p className='text-center text-xs text-gray-400 mt-2'>AI 正在努力思考中，请稍候...</p>}
           </form>
         </footer>
 

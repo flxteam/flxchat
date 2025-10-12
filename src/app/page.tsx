@@ -216,7 +216,7 @@ export default function Home() {
   };
 
   const handleResetPrompt = () => {
-    setModalSystemPrompt(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧le，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+    setModalSystemPrompt(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   };
 
   const handleCopyMessage = async (content: string) => {
@@ -492,7 +492,43 @@ export default function Home() {
     }
   };
 
+  const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+
+        if (width > height) {
+          if (width > maxSize) {
+            height = Math.round((height * maxSize) / width);
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = Math.round((width * maxSize) / height);
+            height = maxSize;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return reject(new Error('Failed to get canvas context'));
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8)); // Adjust quality here
+      };
+      img.onerror = (error) => {
+        reject(error);
+      };
+    });
+  };
+
   useEffect(() => {
+    // Scroll to the bottom of the messages container
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
@@ -840,13 +876,19 @@ export default function Home() {
                 id="file-upload"
                 multiple
                 accept="image/*"
-                onChange={(e) => {
+                onChange={async (e) => {
                   if (e.target.files) {
-                    const files = Array.from(e.target.files).map(file => ({
-                      file,
-                      preview: URL.createObjectURL(file),
-                    }));
-                    setAttachments(prev => [...prev, ...files]);
+                    const fileList = Array.from(e.target.files);
+                    const compressedFiles = await Promise.all(
+                      fileList.map(async (file) => {
+                        const compressedPreview = await compressImage(file);
+                        return {
+                          file,
+                          preview: compressedPreview,
+                        };
+                      })
+                    );
+                    setAttachments(prev => [...prev, ...compressedFiles]);
                   }
                 }}
                 className="hidden"

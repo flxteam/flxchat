@@ -47,7 +47,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
   };
 
   return (
-    <div className={`bg-gray-800 flex flex-col transition-all duration-300 ease-in-out ${isCollapsed ? 'w-16' : 'w-64 p-4'}`}>
+    <div className={`bg-gray-800 flex flex-col transition-all duration-300 ease-in-out rounded-r-lg ${isCollapsed ? 'w-16' : 'w-64 p-4'}`}>
       <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} mb-4`}>
         {!isCollapsed && <h2 className="text-lg font-bold">历史对话</h2>}
         <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 hover:bg-gray-700 rounded-md">

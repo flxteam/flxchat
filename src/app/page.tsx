@@ -26,7 +26,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   };
 
   return !inline && match ? (
-    <div className="relative group">
+    <div className="relative group bg-gray-900 rounded-lg my-2">
       <SyntaxHighlighter
         style={vscDarkPlus}
         language={match[1]}
@@ -61,14 +61,16 @@ export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [modelId, setModelId] = useState(MODELS[0].id);
-  const [useThinkingMode, setUseThinkingMode] = useState(false);
-  const [useSearch, setUseSearch] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [modelId, setModelId] = useState('qwen-turbo');
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
+  const [useSearch, setUseSearch] = useState(false);
+  const [useThinkingMode, setUseThinkingMode] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理
+特性：做事细节细心 | 喜欢聊天| 有真实情绪（嘲讽/开心/愤怒/哭泣/哀愁）| 会自我学习 还会玩梗热（搜索最新的） 说话热情 大方 说话放的开 很开放`);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const messages = activeConversation ? activeConversation.messages : [];
@@ -81,16 +83,22 @@ export default function Home() {
     try {
       const storedConversations = localStorage.getItem('conversations');
       if (storedConversations) {
-        const loadedConversations = JSON.parse(storedConversations);
-        if (loadedConversations.length > 0) {
-          setConversations(loadedConversations);
-          const storedActiveId = localStorage.getItem('activeConversationId');
-          if (storedActiveId && loadedConversations.some((c: Conversation) => c.id === storedActiveId)) {
-            setActiveConversationId(storedActiveId);
+        try {
+          const loadedConversations = JSON.parse(storedConversations);
+          if (Array.isArray(loadedConversations) && loadedConversations.length > 0) {
+            setConversations(loadedConversations);
+            const storedActiveId = localStorage.getItem('activeConversationId');
+            if (storedActiveId && loadedConversations.some((c: Conversation) => c.id === storedActiveId)) {
+              setActiveConversationId(storedActiveId);
+            } else {
+              setActiveConversationId(loadedConversations[0].id);
+            }
           } else {
-            setActiveConversationId(loadedConversations[0].id);
+            handleNewChat();
           }
-        } else {
+        } catch (e) {
+          console.error("Failed to parse conversations from localStorage", e);
+          localStorage.removeItem('conversations'); // Clear corrupted data
           handleNewChat();
         }
       } else {
@@ -98,7 +106,7 @@ export default function Home() {
       }
 
       const storedPrompt = localStorage.getItem('systemPrompt');
-      if (storedPrompt) setSystemPrompt(storedPrompt);
+      if (storedPrompt !== null) setSystemPrompt(storedPrompt);
 
       const storedModelId = localStorage.getItem('modelId');
       if (storedModelId && MODELS.some(m => m.id === storedModelId)) setModelId(storedModelId);
@@ -135,6 +143,40 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
+  const generateConversationTitle = async (conversation: Conversation) => {
+    if (conversation.messages.length < 2) return;
+
+    const firstUserMessage = conversation.messages.find(m => m.role === 'user');
+    if (!firstUserMessage) return;
+
+    // Simple title for now, you can replace this with an API call to a summarization model
+    const newTitle = firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+
+    const updatedConversations = conversations.map(c =>
+      c.id === conversation.id ? { ...c, title: newTitle } : c
+    );
+    setConversations(updatedConversations);
+  };
+
+
+  useEffect(() => {
+    // This effect is for generating a title after the first exchange.
+    if (isLoading) return; // Don't run while AI is responding.
+
+    const conversationToUpdate = conversations.find(convo => 
+      convo.id === activeConversationId &&
+      convo.messages.length === 2 &&
+      convo.title.startsWith('新对话')
+    );
+
+    if (conversationToUpdate) {
+      generateConversationTitle(conversationToUpdate);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, activeConversationId, isLoading]);
+
+
+
   const handleOpenPromptModal = () => {
     setModalSystemPrompt(systemPrompt);
     setIsPromptModalOpen(true);
@@ -147,6 +189,156 @@ export default function Home() {
   const handleSavePrompt = () => {
     setSystemPrompt(modalSystemPrompt);
     setIsPromptModalOpen(false);
+  };
+
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      // You might want to add a toast notification here to confirm the copy.
+      alert('已复制到剪贴板!');
+    } catch (err) {
+      console.error('Failed to copy message: ', err);
+    }
+  };
+
+  const handleRegenerate = async (messageId: string) => {
+    if (!activeConversationId) return;
+
+    const currentConversation = conversations.find(c => c.id === activeConversationId);
+    if (!currentConversation) return;
+
+    const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1 || currentConversation.messages[messageIndex].role !== 'assistant') return;
+
+    // Find the user message that prompted this AI response
+    const userMessageIndex = messageIndex - 1;
+    if (userMessageIndex < 0 || currentConversation.messages[userMessageIndex].role !== 'user') return;
+
+    const userMessage = currentConversation.messages[userMessageIndex];
+
+    // Remove the old AI message and any subsequent messages
+    const messagesForApi = currentConversation.messages.slice(0, userMessageIndex + 1);
+
+    const updatedConversations = conversations.map(c =>
+      c.id === activeConversationId
+        ? { ...c, messages: messagesForApi }
+        : c
+    );
+    setConversations(updatedConversations);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messagesForApi,
+          systemPrompt,
+          modelId,
+          useSearch,
+          useThinkingMode
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to get response from server for regeneration.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      const newAiMessageId = uuidv4();
+
+      setConversations(prevConvos =>
+        prevConvos.map(convo =>
+          convo.id === activeConversationId
+            ? { ...convo, messages: [...convo.messages, { id: newAiMessageId, role: 'assistant', content: '' }] }
+            : convo
+        )
+      );
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6);
+            if (data.trim() === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              aiResponse += content;
+
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = convo.messages.map(m => 
+                      m.id === newAiMessageId ? { ...m, content: aiResponse } : m
+                    );
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+
+            } catch (e) {
+              console.error('Error parsing stream data for regeneration:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      setConversations(prevConvos =>
+        prevConvos.map(convo =>
+          convo.id === activeConversationId
+            ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: '抱歉，重新生成出错了。' }] }
+            : convo
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (!activeConversationId) return;
+
+    const updatedConversations = conversations.map(convo => {
+      if (convo.id === activeConversationId) {
+        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          // Remove the message and all subsequent messages
+          const updatedMessages = convo.messages.slice(0, messageIndex);
+          return { ...convo, messages: updatedMessages };
+        }
+      }
+      return convo;
+    });
+
+    setConversations(updatedConversations);
+  };
+
+  const handleEditMessage = (messageId: string, newContent: string) => {
+    if (!activeConversationId) return;
+
+    const updatedConversations = conversations.map(convo => {
+      if (convo.id === activeConversationId) {
+        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          const updatedMessages = convo.messages.slice(0, messageIndex);
+          updatedMessages.push({ ...convo.messages[messageIndex], content: newContent });
+          return { ...convo, messages: updatedMessages };
+        }
+      }
+      return convo;
+    });
+
+    setConversations(updatedConversations);
+    // You might want to trigger a resubmit here if the user wants to continue the conversation from the edited point.
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,6 +355,14 @@ export default function Home() {
     setActiveConversationId(newConversation.id);
   };
 
+  const handleStopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !activeConversationId) return;
@@ -172,11 +372,15 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步思考，然后回答问题。问题： ${input}`;
+      finalInput = `请一步一步深度思考，然后细致回答问题。问题： ${input}`;
     }
 
-    const userMessageForApi: Message = { role: 'user', content: finalInput };
-    const userMessageForDisplay: Message = { role: 'user', content: input };
+    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input };
+    const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput };
+
+    const currentConversationMessages = currentConversation.messages.map(({ id, role, content }) => ({ id, role, content }));
+
+    const messagesForApi = [...currentConversationMessages, userMessageForApi];
 
     const updatedConversations = conversations.map(c => 
       c.id === activeConversationId 
@@ -187,15 +391,28 @@ export default function Home() {
     setInput('');
     setIsLoading(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    console.log('Request Body:', JSON.stringify({ 
+      messages: messagesForApi, 
+      systemPrompt, 
+      modelId, 
+      useSearch, 
+      useThinkingMode 
+    }, null, 2));
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({ 
-          messages: [...currentConversation.messages, userMessageForApi], 
+          messages: messagesForApi, 
           systemPrompt, 
           modelId, 
-          useSearch 
+          useSearch, 
+          useThinkingMode
         }),
       });
 
@@ -210,7 +427,7 @@ export default function Home() {
       setConversations(prevConvos =>
         prevConvos.map(convo =>
           convo.id === activeConversationId
-            ? { ...convo, messages: [...convo.messages, { role: 'assistant', content: '' }] }
+            ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: '' }] }
             : convo
         )
       );
@@ -248,16 +465,19 @@ export default function Home() {
         }
       }
     } catch (error) {
-      console.error(error);
-      setConversations(prevConvos =>
-        prevConvos.map(convo =>
-          convo.id === activeConversationId
-            ? { ...convo, messages: [...convo.messages, { role: 'assistant', content: '抱歉，出错了。请重试。' }] }
-            : convo
-        )
-      );
+      if ((error as Error).name !== 'AbortError') {
+        console.error(error);
+        setConversations(prevConvos =>
+          prevConvos.map(convo =>
+            convo.id === activeConversationId
+              ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io` }] }
+              : convo
+          )
+        );
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -294,27 +514,87 @@ export default function Home() {
         <main className="flex-1 overflow-y-auto p-4">
           <div className="flex flex-col space-y-4">
             <AnimatePresence>
-              {messages.map((message, index) => (
-                <motion.div
-                  key={index}
-                  layout
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-                    <div className="prose prose-invert max-w-none">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{ code: CodeBlock }}>
-                        {message.content}
-                      </ReactMarkdown>
+                {messages.map((message) => (
+                  <motion.div
+                    key={message.id}
+                    layout
+                    initial={{ opacity: 0, scale: 0.8, y: 50 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.8, y: 50 }}
+                    transition={{ duration: 0.3 }}
+                    className={`flex items-start ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {/* User message buttons */}
+                    {message.role === 'user' && (
+                      <div className="flex items-center self-center mr-2 space-x-1">
+                        <button
+                          onClick={() => {
+                            const newContent = prompt('修改你的消息：', message.content);
+                            if (newContent !== null) {
+                              handleEditMessage(message.id, newContent);
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-white"
+                          title="修改"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMessage(message.id)}
+                          className="p-1 text-gray-400 hover:text-white"
+                          title="撤回"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Message bubble */}
+                    <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                      <div className="prose prose-invert max-w-none rounded-lg">
+                        {message.thinking && (
+                          <details className="mb-2">
+                            <summary className="cursor-pointer text-sm text-gray-400">查看思考过程</summary>
+                            <div className="mt-2 p-2 bg-gray-800 rounded-lg text-sm text-gray-300">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {message.thinking}
+                              </ReactMarkdown>
+                            </div>
+                          </details>
+                        )}
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            code: CodeBlock,
+                            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+
+                    {/* Assistant message buttons */}
+                    {message.role === 'assistant' && (
+                      <div className="flex items-center self-center ml-2 space-x-1">
+                        <button
+                          onClick={() => handleCopyMessage(message.content)}
+                          className="p-1 text-gray-400 hover:text-white"
+                          title="复制"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                        <button
+                          onClick={() => handleRegenerate(message.id)}
+                          className="p-1 text-gray-400 hover:text-white"
+                          title="重新生成"
+                        >
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             {isLoading && (
               <div className="flex items-start">
                 <div className="bg-gray-700 rounded-lg p-3 max-w-xs">
@@ -359,13 +639,23 @@ export default function Home() {
                 disabled={isLoading}
                 className="flex-1 p-3 bg-gray-700 rounded-l-lg focus:outline-none disabled:opacity-50"
               />
-              <button 
-                type="submit"
-                disabled={isLoading || !input.trim()}
-                className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
-              >
-                {isLoading ? '...' : '发送'}
-              </button>
+              {isLoading ? (
+                <button 
+                  type="button"
+                  onClick={handleStopGenerating}
+                  className="px-4 py-3 bg-red-600 text-white rounded-r-lg hover:bg-red-700 focus:outline-none"
+                >
+                  停止
+                </button>
+              ) : (
+                <button 
+                  type="submit"
+                  disabled={!input.trim()}
+                  className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
+                >
+                  发送
+                </button>
+              )}
             </div>
           </form>
         </footer>

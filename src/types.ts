@@ -1,6 +1,8 @@
 export interface Message {
-    role: 'user' | 'assistant';
-    content: string;
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  thinking?: string; // AI的思考过程
 }
 
 export interface Conversation {

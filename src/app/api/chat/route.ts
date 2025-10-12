@@ -46,35 +46,103 @@ async function performSearch(query: string) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messages, systemPrompt, modelId, useSearch } = body;
+  const { messages, systemPrompt, modelId, useSearch, useThinkingMode } = body;
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
   }
 
+  // 1. Sanitize all message content
+  const sanitizeContent = (content: string) => {
+    if (typeof content !== 'string') return '';
+    return content
+      .replace(/[\r\n]+/g, '\n')      // Normalize newlines
+      .replace(/[“”]/g, '"')         // Replace curly double quotes
+      .replace(/[‘’]/g, "'")         // Replace curly single quotes
+      .replace(/—/g, '-')           // Replace em dash
+      .replace(/…/g, '...')         // Replace ellipsis
+      .replace(/&#x27;/g, "'")        // Replace HTML entity for single quote
+      .replace(/[◆|]/g, ' ')         // Replace special symbols with a space
+      .replace(/：/g, ':')           // Full-width colon
+      .replace(/（/g, '(')           // Full-width open parenthesis
+      .replace(/）/g, ')')           // Full-width close parenthesis
+      .replace(/，/g, ',')           // Full-width comma
+      .replace(/。/g, '. ')          // Full-width period
+      .replace(/？/g, '?')           // Full-width question mark
+      .replace(/！/g, '!')           // Full-width exclamation mark
+      .replace(/；/g, ';')           // Full-width semicolon
+      .replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+      .trim();
+  };
+
+  const sanitizedMessages = messages.map((msg: any) => ({
+    ...msg,
+    content: sanitizeContent(msg.content),
+  }));
+
+  const sanitizedSystemPrompt = systemPrompt ? sanitizeContent(systemPrompt) : '';
+
+  // 2. Truncate conversation history to fit within a token limit (approximated by character count)
+  const MAX_CONTEXT_LENGTH = 8000; // Approximate character limit for context
+  
+  let finalMessages: any[] = [];
+
+  // Add system prompt if it exists
+  if (sanitizedSystemPrompt) {
+    finalMessages.push({ role: 'system', content: sanitizedSystemPrompt });
+  }
+
+  // Add user messages from the end, calculating total length
+  let currentLength = finalMessages.reduce((acc, msg) => acc + msg.content.length, 0);
+
+  for (let i = sanitizedMessages.length - 1; i >= 0; i--) {
+    const msg = sanitizedMessages[i];
+    const messageLength = msg.content.length;
+    if (currentLength + messageLength <= MAX_CONTEXT_LENGTH) {
+      finalMessages.unshift(msg);
+      currentLength += messageLength;
+    } else {
+      // If the last message is too long, truncate it.
+      if (i === sanitizedMessages.length - 1) {
+        const availableSpace = MAX_CONTEXT_LENGTH - currentLength;
+        const truncatedContent = `...[内容过长，已截断]...\n${msg.content.slice(messageLength - availableSpace)}`;
+        finalMessages.unshift({ ...msg, content: truncatedContent });
+      }
+      break; 
+    }
+  }
+
+  // If no messages could be added (e.g., system prompt is too long), handle it.
+  if (finalMessages.length === (sanitizedSystemPrompt ? 1 : 0) && sanitizedMessages.length > 0) {
+      const lastMsg = sanitizedMessages[sanitizedMessages.length - 1];
+      const availableSpace = MAX_CONTEXT_LENGTH - (sanitizedSystemPrompt ? sanitizedSystemPrompt.length : 0);
+      const truncatedContent = `...[内容过长，已截断]...\n${lastMsg.content.slice(lastMsg.content.length - availableSpace)}`;
+      finalMessages.push({ ...lastMsg, content: truncatedContent });
+  }
+
   const apiKey = process.env.SILICONFLOW_API_KEY;
-  const apiBase = 'https://api.siliconflow.cn/v1'; // Correct API base for SiliconFlow
+  const apiBase = 'https://api.siliconflow.cn/v1';
 
   if (!apiKey) {
     console.error('Missing environment variable: SILICONFLOW_API_KEY');
     return new NextResponse('API configuration is missing on the server.', { status: 500 });
   }
 
-  const messagesWithPrompt = [...messages];
-  if (systemPrompt) {
-    messagesWithPrompt.unshift({ role: 'system', content: systemPrompt });
-  }
-
   const requestBody: any = {
     model: modelId,
-    messages: messagesWithPrompt,
-    stream: true,
+    messages: finalMessages, // Use the truncated and sanitized messages
   };
 
-  // Add tools if search is enabled
   if (useSearch) {
     requestBody.tools = [searchTool];
-    requestBody.stream = false; // First request is not streamed to check for tool calls
+    requestBody.stream = false;
+  } else {
+    requestBody.stream = true;
+    if (useThinkingMode) {
+      requestBody.stream_options = {
+        include_thinking: true,
+      };
+    }
   }
 
   try {
@@ -97,8 +165,9 @@ export async function POST(req: NextRequest) {
             const searchResult = await performSearch(query);
 
             // Add tool call and result to messages
-            messagesWithPrompt.push(responseData.choices[0].message); // Add AI's tool request
-            messagesWithPrompt.push({
+            const messagesWithToolResults = [...finalMessages];
+            messagesWithToolResults.push(responseData.choices[0].message); // Add AI's tool request
+            messagesWithToolResults.push({
                 role: 'tool',
                 tool_call_id: toolCall.id,
                 content: searchResult,
@@ -113,7 +182,7 @@ export async function POST(req: NextRequest) {
                 },
                 body: JSON.stringify({
                     model: modelId,
-                    messages: messagesWithPrompt,
+                    messages: messagesWithToolResults,
                     stream: true, // Get the final answer as a stream
                 }),
             });
@@ -157,12 +226,17 @@ export async function POST(req: NextRequest) {
           return;
         }
         const reader = response.body.getReader();
+        const decoder = new TextDecoder();
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) {
             break;
           }
+          // Manually process and forward the stream
+          const chunk = decoder.decode(value, { stream: true });
+          // Here you could inspect the chunk for 'event: thinking' if needed,
+          -          // but for now, we just forward everything.
           controller.enqueue(value);
         }
         controller.close();

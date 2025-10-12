@@ -499,7 +499,7 @@ export default function Home() {
       if (input.trim() && !isLoading) {
         event.currentTarget.form?.requestSubmit();
       }
-    }
+    };
   };
 
   useEffect(() => {

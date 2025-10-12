@@ -281,45 +281,71 @@ export default function Home() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
+        
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n\n');
+        const lines = chunk.split('\n').filter(line => line.trim() !== ''); // Split by \n and filter empty lines
+
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.substring(7).trim();
+            if (eventType === 'thinking') {
+              // Handle thinking event
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.thinking = '思考中...'; // Set thinking status
+                    } else {
+                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' });
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+            }
+            // Add other event types here if needed
+          } else if (line.startsWith('data: ')) {
             const data = line.substring(6);
-            if (data.trim() === '[DONE]') break;
+            if (data.trim() === '[DONE]') {
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage) {
+                      delete lastMessage.thinking; // Remove thinking status when done
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+              break;
+            }
             try {
               const parsed = JSON.parse(data);
-              if (parsed.thinking) {
-                setConversations(prevConvos =>
-                  prevConvos.map(convo => {
-                    if (convo.id === activeConversationId) {
-                      const updatedMessages = [...convo.messages];
-                      updatedMessages[updatedMessages.length - 1].thinking = parsed.thinking;
-                      return { ...convo, messages: updatedMessages };
+              const content = parsed.choices[0]?.delta?.content || '';
+              aiResponse += content;
+              
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.content = aiResponse;
+                      delete lastMessage.thinking; // Remove thinking status once content starts arriving
+                    } else {
+                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: aiResponse });
                     }
-                    return convo;
-                  })
-                );
-              } else {
-                const content = parsed.choices[0]?.delta?.content || '';
-                aiResponse += content;
-                
-                setConversations(prevConvos =>
-                  prevConvos.map(convo => {
-                    if (convo.id === activeConversationId) {
-                      const updatedMessages = [...convo.messages];
-                      updatedMessages[updatedMessages.length - 1].content = aiResponse;
-                      // Clear thinking message once response starts streaming
-                      if (updatedMessages[updatedMessages.length - 1].thinking) {
-                        delete updatedMessages[updatedMessages.length - 1].thinking;
-                      }
-                      return { ...convo, messages: updatedMessages };
-                    }
-                    return convo;
-                  })
-                );
-              }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
 
             } catch (e) {
               console.error('Error parsing stream data for regeneration:', e);
@@ -556,11 +582,48 @@ export default function Home() {
         if (done) break;
         
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n\n');
+        const lines = chunk.split('\n').filter(line => line.trim() !== ''); // Split by \n and filter empty lines
+
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.substring(7).trim();
+            if (eventType === 'thinking') {
+              // Handle thinking event
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.thinking = '思考中...'; // Set thinking status
+                    } else {
+                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' });
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+            }
+            // Add other event types here if needed
+          } else if (line.startsWith('data: ')) {
             const data = line.substring(6);
-            if (data.trim() === '[DONE]') break;
+            if (data.trim() === '[DONE]') {
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage) {
+                      delete lastMessage.thinking; // Remove thinking status when done
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+              break;
+            }
             try {
               const parsed = JSON.parse(data);
               const content = parsed.choices[0]?.delta?.content || '';
@@ -570,7 +633,13 @@ export default function Home() {
                 prevConvos.map(convo => {
                   if (convo.id === activeConversationId) {
                     const updatedMessages = [...convo.messages];
-                    updatedMessages[updatedMessages.length - 1].content = aiResponse;
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.content = aiResponse;
+                      delete lastMessage.thinking; // Remove thinking status once content starts arriving
+                    } else {
+                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: aiResponse });
+                    }
                     return { ...convo, messages: updatedMessages };
                   }
                   return convo;

@@ -52,7 +52,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 const MODELS = [
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
   { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
-  { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek 定制' },
+  { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek ' },
   { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1-9B' },
   { id: 'TeleAI/TeleSpeechASR', name: 'TeleAI' },
 ];
@@ -500,7 +500,7 @@ export default function Home() {
         event.currentTarget.form?.requestSubmit();
       }
     };
-  };
+
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -702,7 +702,6 @@ export default function Home() {
         abortControllerRef.current = null;
       }
     };
-  };
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">

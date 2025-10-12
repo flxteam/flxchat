@@ -170,7 +170,8 @@ export async function POST(req: NextRequest) {
   if (modelId === 'THUDM/GLM-4.1V-9B-Thinking' && attachments && attachments.length > 0) {
     const lastUserMessage = finalMessages.findLast(m => m.role === 'user');
     if (lastUserMessage) {
-      const contentParts = [{ type: 'text', text: lastUserMessage.content }];
+      type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
+      const contentParts: ContentPart[] = [{ type: 'text', text: lastUserMessage.content }];
       for (const attachment of attachments) {
         contentParts.push({ type: 'image_url', image_url: { url: attachment } });
       }

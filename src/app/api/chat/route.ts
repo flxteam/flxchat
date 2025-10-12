@@ -92,8 +92,7 @@ async function getDailyNews(platform: string) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messages, systemPrompt, useSearch, useThinkingMode } = body;
-  const modelId = 'Qwen/Qwen3-8B'; // Hardcode modelId for testing
+  const { messages, systemPrompt, modelId, useSearch, useThinkingMode, attachments } = body;
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
@@ -165,6 +164,18 @@ export async function POST(req: NextRequest) {
       const availableSpace = MAX_CONTEXT_LENGTH - (sanitizedSystemPrompt ? sanitizedSystemPrompt.length : 0);
       const truncatedContent = `...[内容过长，已截断]...\n${lastMsg.content.slice(lastMsg.content.length - availableSpace)}`;
       finalMessages.push({ ...lastMsg, content: truncatedContent });
+  }
+
+  // Handle multimodal attachments
+  if (modelId === 'THUDM/GLM-4.1V-9B-Thinking' && attachments && attachments.length > 0) {
+    const lastUserMessage = finalMessages.findLast(m => m.role === 'user');
+    if (lastUserMessage) {
+      const contentParts = [{ type: 'text', text: lastUserMessage.content }];
+      for (const attachment of attachments) {
+        contentParts.push({ type: 'image_url', image_url: { url: attachment } });
+      }
+      lastUserMessage.content = contentParts;
+    }
   }
 
   const apiKey = process.env.SILICONFLOW_API_KEY;

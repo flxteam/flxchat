@@ -69,6 +69,7 @@ export default function Home() {
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
+  const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -272,7 +273,8 @@ export default function Home() {
           systemPrompt,
           modelId,
           useSearch,
-          useThinkingMode
+          useThinkingMode,
+          attachments: attachments.map(a => a.preview)
         }),
       });
 
@@ -374,7 +376,7 @@ export default function Home() {
   const handleDeleteMessage = (messageId: string) => {
     if (!activeConversationId) return;
 
-    const updatedConversations = conversations.map(convo => {
+    const updatedConversations = conversations.find(convo => {
       if (convo.id === activeConversationId) {
         const messageIndex = convo.messages.findIndex(m => m.id === messageId);
         if (messageIndex !== -1) {
@@ -527,8 +529,8 @@ export default function Home() {
       finalInput = `请一步一步深度思考，然后细致回答问题。问题： ${input}`;
     }
 
-    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input };
-    const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput };
+    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
+    const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput, attachments: attachments.map(a => a.preview) };
     const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
 
     const messagesForApi = [...currentConversation.messages, userMessageForApi];
@@ -541,6 +543,7 @@ export default function Home() {
       )
     );
     setInput('');
+    setAttachments([]);
     setIsLoading(true);
 
     const controller = new AbortController();
@@ -556,7 +559,8 @@ export default function Home() {
           systemPrompt,
           modelId,
           useSearch,
-          useThinkingMode
+          useThinkingMode,
+          attachments: attachments.map(a => a.preview)
         }),
       });
 
@@ -724,6 +728,13 @@ export default function Home() {
 
                     {/* Message bubble */}
                     <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {message.attachments.map((attachment, index) => (
+                              <img key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg" />
+                            ))}
+                          </div>
+                        )}
                         <div className="prose prose-invert max-w-none rounded-lg">
                           {message.content ? (
                             <ReactMarkdown
@@ -795,7 +806,51 @@ export default function Home() {
                 自定义提示词
               </button>
             </div>
-            <div className="relative w-full">
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((attachment, index) => (
+                  <div key={index} className="relative">
+                    <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" />
+                    <button
+                      type="button"
+                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
+                      className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs"
+                      style={{ transform: 'translate(50%, -50%)' }}
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="relative w-full flex items-center">
+              {modelId === 'THUDM/GLM-4.1V-9B-Thinking' && (
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  disabled={isLoading}
+                  className="p-2 text-gray-400 hover:text-white disabled:opacity-50"
+                  title="上传附件"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                </button>
+              )}
+              <input
+                type="file"
+                id="file-upload"
+                multiple
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const files = Array.from(e.target.files).map(file => ({
+                      file,
+                      preview: URL.createObjectURL(file),
+                    }));
+                    setAttachments(prev => [...prev, ...files]);
+                  }
+                }}
+                className="hidden"
+              />
               <textarea
                 ref={textareaRef}
                 value={input}

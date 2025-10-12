@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 
-const logFilePath = path.join(process.cwd(), 'debug.log');
-const log = (message: string) => {
-  fs.appendFileSync(logFilePath, `[${new Date().toISOString()}] ${message}\n`);
-};
+const log = console.log;
 
 log('--- NEW REQUEST ---');
 

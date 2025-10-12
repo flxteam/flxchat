@@ -376,7 +376,7 @@ export default function Home() {
   const handleDeleteMessage = (messageId: string) => {
     if (!activeConversationId) return;
 
-    const updatedConversations = conversations.find(convo => {
+    const updatedConversations = conversations.map(convo => {
       if (convo.id === activeConversationId) {
         const messageIndex = convo.messages.findIndex(m => m.id === messageId);
         if (messageIndex !== -1) {

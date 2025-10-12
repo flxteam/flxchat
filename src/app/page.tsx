@@ -276,15 +276,19 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
+          if (line.trim() === '') continue;
+
           if (line.startsWith('event: searching')) {
             setConversations(prevConvos =>
               prevConvos.map(convo => {
@@ -553,15 +557,19 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
+          if (line.trim() === '') continue;
+
           if (line.startsWith('event: searching')) {
             setConversations(prevConvos =>
               prevConvos.map(convo => {

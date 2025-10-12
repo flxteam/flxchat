@@ -325,7 +325,9 @@ export default function Home() {
                   const lastMessage = updatedMessages[updatedMessages.length - 1];
                   if (lastMessage && lastMessage.role === 'assistant') {
                     lastMessage.content = aiResponse;
-                    if (lastMessage.thinking) delete lastMessage.thinking;
+                    if (aiResponse && lastMessage.thinking) {
+                      delete lastMessage.thinking;
+                    }
                   }
                   return { ...convo, messages: updatedMessages };
                 })
@@ -600,7 +602,9 @@ export default function Home() {
                   const lastMessage = updatedMessages[updatedMessages.length - 1];
                   if (lastMessage && lastMessage.role === 'assistant') {
                     lastMessage.content = aiResponse;
-                    if (lastMessage.thinking) delete lastMessage.thinking;
+                    if (aiResponse && lastMessage.thinking) {
+                      delete lastMessage.thinking;
+                    }
                   }
                   return { ...convo, messages: updatedMessages };
                 })

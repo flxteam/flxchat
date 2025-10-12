@@ -52,8 +52,10 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 const MODELS = [
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
   { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
-  { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek ' },
-  { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1-9B' },
+  { id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B-0414' },
+  { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-Qwen3-8B' },
+  { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek-R1-Distill-Qwen-7B' },
+  { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },
   { id: 'TeleAI/TeleSpeechASR', name: 'TeleAI' },
 ];
 
@@ -61,7 +63,7 @@ export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [modelId, setModelId] = useState('qwen-turbo');
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
@@ -250,7 +252,7 @@ export default function Home() {
         : c
     );
     setConversations(updatedConversations);
-    setIsGenerating(true);
+    setIsLoading(true);
 
     try {
       const response = await fetch('/api/chat', {
@@ -382,8 +384,8 @@ export default function Home() {
         )
       );
     } finally {
-        setIsGenerating(false);
-      }
+      setIsLoading(false);
+    }
   };
 
   const handleDeleteMessage = (messageId: string) => {
@@ -499,8 +501,8 @@ export default function Home() {
       if (input.trim() && !isLoading) {
         event.currentTarget.form?.requestSubmit();
       }
-    };
-
+    }
+  };
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -553,7 +555,7 @@ export default function Home() {
     );
     setConversations(updatedConversations);
     setInput('');
-    setIsGenerating(true);
+    setIsLoading(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -698,10 +700,10 @@ export default function Home() {
         );
       }
     } finally {
-        setIsGenerating(false);
-        abortControllerRef.current = null;
-      }
-    };
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
@@ -772,27 +774,28 @@ export default function Home() {
 
                     {/* Message bubble */}
                     <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-                        {message.thinking && !message.content ? (
-                          <div className="flex items-center gap-2 text-sm text-gray-400">
-                            <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
-                            <span>{message.thinking}</span>
-                          </div>
-                        ) : (
-                          <ReactMarkdown
-                            className="prose prose-invert max-w-none"
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                              code: CodeBlock,
-                              a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-                            }}
-                          >
-                            {message.content}
-                          </ReactMarkdown>
-                        )}
+                        <div className="prose prose-invert max-w-none rounded-lg">
+                          {message.content ? (
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                code: CodeBlock,
+                                a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+                              }}
+                            >
+                              {message.content}
+                            </ReactMarkdown>
+                          ) : message.thinking ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                              <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
+                              <span>{message.thinking}</span>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
 
                     {/* Assistant message buttons */}
-                    {message.role === 'assistant' && (
+                    {message.role === 'assistant' && message.content && !isLoading && (
                       <div className="flex items-center self-center ml-2 space-x-1">
                         <button
                           onClick={() => handleCopyMessage(message.content)}
@@ -813,6 +816,13 @@ export default function Home() {
                   </motion.div>
                 ))}
               </AnimatePresence>
+            {isLoading && (
+              <div className="flex items-start">
+                <div className="bg-gray-700 rounded-lg p-3 max-w-xs">
+                  <p className='animate-pulse'>...</p>
+                </div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         </main>
@@ -835,7 +845,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleOpenPromptModal}
-                disabled={isGenerating}
+                disabled={isLoading}
                 className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap disabled:opacity-50"
               >
                 自定义提示词
@@ -850,7 +860,7 @@ export default function Home() {
                 placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")}
                 className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 text-black dark:text-white rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200 max-h-40 overflow-y-auto"
                 rows={1}
-                disabled={isGenerating || isTranscribing}
+                disabled={isLoading || isTranscribing}
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
                 <button
@@ -859,7 +869,7 @@ export default function Home() {
                   onMouseUp={handleStopRecording}
                   onTouchStart={handleStartRecording}
                   onTouchEnd={handleStopRecording}
-                  disabled={isGenerating || isTranscribing}
+                  disabled={isLoading || isTranscribing}
                   className={`p-2 rounded-full transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
                   {isTranscribing ? (
                     <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
@@ -869,7 +879,7 @@ export default function Home() {
                     </svg>
                   )}
                 </button>
-                {isGenerating ? (
+                {isLoading ? (
                   <button 
                     type="button"
                     onClick={handleStopGenerating}
@@ -881,7 +891,7 @@ export default function Home() {
                   <button 
                     type="submit" 
                     disabled={!input.trim() || isTranscribing}
-                    className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:bg-ray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
+                    className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -947,7 +957,7 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
-     </main>
+      </div>
     </div>
   );
 }

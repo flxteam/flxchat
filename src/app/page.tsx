@@ -229,7 +229,7 @@ export default function Home() {
   };
 
   const handleRegenerate = async (messageId: string) => {
-    if (!activeConversationId) return;
+    if (!activeConversationId || isLoading) return;
 
     const currentConversation = conversations.find(c => c.id === activeConversationId);
     if (!currentConversation) return;
@@ -237,27 +237,29 @@ export default function Home() {
     const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1 || currentConversation.messages[messageIndex].role !== 'assistant') return;
 
-    // Find the user message that prompted this AI response
     const userMessageIndex = messageIndex - 1;
     if (userMessageIndex < 0 || currentConversation.messages[userMessageIndex].role !== 'user') return;
 
-    const userMessage = currentConversation.messages[userMessageIndex];
-
-    // Remove the old AI message and any subsequent messages
     const messagesForApi = currentConversation.messages.slice(0, userMessageIndex + 1);
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
 
-    const updatedConversations = conversations.map(c =>
-      c.id === activeConversationId
-        ? { ...c, messages: messagesForApi }
-        : c
+    setConversations(prevConvos =>
+      prevConvos.map(c =>
+        c.id === activeConversationId
+          ? { ...c, messages: [...messagesForApi, assistantPlaceholder] }
+          : c
+      )
     );
-    setConversations(updatedConversations);
     setIsLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           messages: messagesForApi,
           systemPrompt,
@@ -274,74 +276,39 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
-      const newAiMessageId = uuidv4();
-
-      setConversations(prevConvos =>
-        prevConvos.map(convo =>
-          convo.id === activeConversationId
-            ? { ...convo, messages: [...convo.messages, { id: newAiMessageId, role: 'assistant', content: '' }] }
-            : convo
-        )
-      );
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== ''); // Split by \n and filter empty lines
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
         for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.substring(7).trim();
-            if (eventType === 'thinking') {
-              // Handle thinking event
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.thinking = '思考中...'; // Set thinking status
-                    } else {
-                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' });
-                    }
-                    return { ...convo, messages: updatedMessages };
-                  }
-                  return convo;
-                })
-              );
-            } else if (eventType === 'searching') {
-              // Handle searching event
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.thinking = '搜索中...'; // Set searching status
-                    }
-                    return { ...convo, messages: updatedMessages };
-                  }
-                  return convo;
-                })
-              );
-            }
-            // Add other event types here if needed
+          if (line.startsWith('event: searching')) {
+            setConversations(prevConvos =>
+              prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                  lastMessage.thinking = '搜索中...';
+                }
+                return { ...convo, messages: updatedMessages };
+              })
+            );
           } else if (line.startsWith('data: ')) {
             const data = line.substring(6);
             if (data.trim() === '[DONE]') {
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage) {
-                      delete lastMessage.thinking; // Remove thinking status when done
-                    }
-                    return { ...convo, messages: updatedMessages };
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage) {
+                    delete lastMessage.thinking;
                   }
-                  return convo;
+                  return { ...convo, messages: updatedMessages };
                 })
               );
               break;
@@ -350,24 +317,19 @@ export default function Home() {
               const parsed = JSON.parse(data);
               const content = parsed.choices[0]?.delta?.content || '';
               aiResponse += content;
-              
+
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.content = aiResponse;
-                      delete lastMessage.thinking; // Remove thinking status once content starts arriving
-                    } else {
-                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: aiResponse });
-                    }
-                    return { ...convo, messages: updatedMessages };
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.content = aiResponse;
+                    if (lastMessage.thinking) delete lastMessage.thinking;
                   }
-                  return convo;
+                  return { ...convo, messages: updatedMessages };
                 })
               );
-
             } catch (e) {
               console.error('Error parsing stream data for regeneration:', e);
             }
@@ -375,16 +337,24 @@ export default function Home() {
         }
       }
     } catch (error) {
-      console.error(error);
-      setConversations(prevConvos =>
-        prevConvos.map(convo =>
-          convo.id === activeConversationId
-            ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: '抱歉，重新生成出错了。' }] }
-            : convo
-        )
-      );
+      if ((error as Error).name !== 'AbortError') {
+        console.error(error);
+        setConversations(prevConvos =>
+          prevConvos.map(convo => {
+            if (convo.id !== activeConversationId) return convo;
+            const updatedMessages = [...convo.messages];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = `抱歉，重新生成出错了: ${(error as Error).message}`;
+              delete lastMessage.thinking;
+            }
+            return { ...convo, messages: updatedMessages };
+          })
+        );
+      }
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -531,7 +501,7 @@ export default function Home() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !activeConversationId) return;
+    if (!input.trim() || !activeConversationId || isLoading) return;
 
     const currentConversation = conversations.find(c => c.id === activeConversationId);
     if (!currentConversation) return;
@@ -543,41 +513,33 @@ export default function Home() {
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input };
     const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput };
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
 
-    const currentConversationMessages = currentConversation.messages.map(({ id, role, content }) => ({ id, role, content }));
+    const messagesForApi = [...currentConversation.messages, userMessageForApi];
 
-    const messagesForApi = [...currentConversationMessages, userMessageForApi];
-
-    const updatedConversations = conversations.map(c => 
-      c.id === activeConversationId 
-        ? { ...c, messages: [...c.messages, userMessageForDisplay] }
-        : c
+    setConversations(prevConvos =>
+      prevConvos.map(c =>
+        c.id === activeConversationId
+          ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] }
+          : c
+      )
     );
-    setConversations(updatedConversations);
     setInput('');
     setIsLoading(true);
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    console.log('Request Body:', JSON.stringify({ 
-      messages: messagesForApi, 
-      systemPrompt, 
-      modelId, 
-      useSearch, 
-      useThinkingMode 
-    }, null, 2));
-
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
-        body: JSON.stringify({ 
-          messages: messagesForApi, 
-          systemPrompt, 
-          modelId, 
-          useSearch, 
+        body: JSON.stringify({
+          messages: messagesForApi,
+          systemPrompt,
+          modelId,
+          useSearch,
           useThinkingMode
         }),
       });
@@ -589,73 +551,39 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
-      
-      setConversations(prevConvos =>
-        prevConvos.map(convo =>
-          convo.id === activeConversationId
-            ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: '' }] }
-            : convo
-        )
-      );
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== ''); // Split by \n and filter empty lines
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
         for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.substring(7).trim();
-            if (eventType === 'thinking') {
-              // Handle thinking event
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.thinking = '思考中...'; // Set thinking status
-                    } else {
-                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' });
-                    }
-                    return { ...convo, messages: updatedMessages };
-                  }
-                  return convo;
-                })
-              );
-            } else if (eventType === 'searching') {
-              // Handle searching event
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.thinking = '搜索中...'; // Set searching status
-                    }
-                    return { ...convo, messages: updatedMessages };
-                  }
-                  return convo;
-                })
-              );
-            }
-            // Add other event types here if needed
+          if (line.startsWith('event: searching')) {
+            setConversations(prevConvos =>
+              prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                  lastMessage.thinking = '搜索中...';
+                }
+                return { ...convo, messages: updatedMessages };
+              })
+            );
           } else if (line.startsWith('data: ')) {
             const data = line.substring(6);
             if (data.trim() === '[DONE]') {
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage) {
-                      delete lastMessage.thinking; // Remove thinking status when done
-                    }
-                    return { ...convo, messages: updatedMessages };
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage) {
+                    delete lastMessage.thinking;
                   }
-                  return convo;
+                  return { ...convo, messages: updatedMessages };
                 })
               );
               break;
@@ -664,24 +592,19 @@ export default function Home() {
               const parsed = JSON.parse(data);
               const content = parsed.choices[0]?.delta?.content || '';
               aiResponse += content;
-              
+
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = [...convo.messages];
-                    const lastMessage = updatedMessages[updatedMessages.length - 1];
-                    if (lastMessage && lastMessage.role === 'assistant') {
-                      lastMessage.content = aiResponse;
-                      delete lastMessage.thinking; // Remove thinking status once content starts arriving
-                    } else {
-                      updatedMessages.push({ id: uuidv4(), role: 'assistant', content: aiResponse });
-                    }
-                    return { ...convo, messages: updatedMessages };
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.content = aiResponse;
+                    if (lastMessage.thinking) delete lastMessage.thinking;
                   }
-                  return convo;
+                  return { ...convo, messages: updatedMessages };
                 })
               );
-
             } catch (e) {
               console.error('Error parsing stream data:', e);
             }
@@ -692,11 +615,16 @@ export default function Home() {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
         setConversations(prevConvos =>
-          prevConvos.map(convo =>
-            convo.id === activeConversationId
-              ? { ...convo, messages: [...convo.messages, { id: uuidv4(), role: 'assistant', content: `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io` }] }
-              : convo
-          )
+          prevConvos.map(convo => {
+            if (convo.id !== activeConversationId) return convo;
+            const updatedMessages = [...convo.messages];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
+              delete lastMessage.thinking;
+            }
+            return { ...convo, messages: updatedMessages };
+          })
         );
       }
     } finally {
@@ -816,13 +744,7 @@ export default function Home() {
                   </motion.div>
                 ))}
               </AnimatePresence>
-            {isLoading && (
-              <div className="flex items-start">
-                <div className="bg-gray-700 rounded-lg p-3 max-w-xs">
-                  <p className='animate-pulse'>...</p>
-                </div>
-              </div>
-            )}
+
             <div ref={messagesEndRef} />
           </div>
         </main>

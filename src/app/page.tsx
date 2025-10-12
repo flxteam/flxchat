@@ -317,7 +317,7 @@ export default function Home() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                  <div className={`max-w-3xl p-3 rounded-2xl ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
                     <div className="prose prose-invert max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}

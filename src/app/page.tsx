@@ -870,7 +870,7 @@ export default function Home() {
               </div>
             )}
             <div className="relative w-full flex items-center">
-              {['THUDM/GLM-4.1V-9B-Thinking', 'Qwen/Qwen3-8B', 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', 'THUDM/GLM-Z1-9B-0414'].includes(modelId) && (
+              {['THUDM/GLM-4.1V-9B-Thinking',].includes(modelId) && (
                 <button
                   type="button"
                   onClick={() => document.getElementById('file-upload')?.click()}

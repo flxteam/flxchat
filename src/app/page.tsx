@@ -516,12 +516,16 @@ export default function Home() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
+          URL.revokeObjectURL(img.src); // Revoke on error
           return reject(new Error('Failed to get canvas context'));
         }
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8)); // Adjust quality here
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Adjust quality here
+        URL.revokeObjectURL(img.src); // Revoke after use
+        resolve(dataUrl);
       };
       img.onerror = (error) => {
+        URL.revokeObjectURL(img.src); // Revoke on error
         reject(error);
       };
     });

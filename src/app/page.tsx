@@ -228,19 +228,26 @@ export default function Home() {
     }
   };
 
-  const handleRegenerate = async (messageId: string) => {
+  const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
     if (!activeConversationId || isLoading) return;
 
-    const currentConversation = conversations.find(c => c.id === activeConversationId);
-    if (!currentConversation) return;
+    let messagesForApi: Message[];
 
-    const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1 || currentConversation.messages[messageIndex].role !== 'assistant') return;
+    if (isFromEdit && messagesToRegenerate) {
+      // If it's an edit, use the messages passed from handleSaveEdit
+      messagesForApi = messagesToRegenerate;
+    } else {
+      // For a normal regenerate, find the conversation and slice as before
+      const currentConversation = conversations.find(c => c.id === activeConversationId);
+      if (!currentConversation) return;
 
-    const userMessageIndex = messageIndex - 1;
-    if (userMessageIndex < 0 || currentConversation.messages[userMessageIndex].role !== 'user') return;
+      let messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+      // The assistant message is the one to replace, so we go back one.
+      messageIndex = messageIndex - 1;
+      if (messageIndex < 0) return;
+      messagesForApi = currentConversation.messages.slice(0, messageIndex + 1);
+    }
 
-    const messagesForApi = currentConversation.messages.slice(0, userMessageIndex + 1);
     const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
 
     setConversations(prevConvos =>
@@ -382,23 +389,26 @@ export default function Home() {
     setConversations(updatedConversations);
   };
 
-  const handleEditMessage = (messageId: string, newContent: string) => {
-    if (!activeConversationId) return;
+  const handleSaveEdit = (messageId: string, newContent: string) => {
+    if (!activeConversationId || isLoading) return;
 
-    const updatedConversations = conversations.map(convo => {
-      if (convo.id === activeConversationId) {
-        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
-        if (messageIndex !== -1) {
-          const updatedMessages = convo.messages.slice(0, messageIndex);
-          updatedMessages.push({ ...convo.messages[messageIndex], content: newContent });
-          return { ...convo, messages: updatedMessages };
-        }
-      }
-      return convo;
-    });
+    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
+    if (!convoToUpdate) return;
 
-    setConversations(updatedConversations);
-    // You might want to trigger a resubmit here if the user wants to continue the conversation from the edited point.
+    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Create a new message list, truncated and with the updated content
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex + 1);
+    newMessages[messageIndex] = { ...newMessages[messageIndex], content: newContent };
+
+    // Update the state to show the edit and truncation immediately
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId ? { ...c, messages: newMessages } : c
+    ));
+
+    // Then, trigger regeneration, passing the correct message list to avoid stale state issues
+    handleRegenerate(messageId, true, newMessages);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -693,8 +703,8 @@ export default function Home() {
                         <button
                           onClick={() => {
                             const newContent = prompt('修改你的消息：', message.content);
-                            if (newContent !== null) {
-                              handleEditMessage(message.id, newContent);
+                            if (newContent !== null && newContent !== message.content) {
+                              handleSaveEdit(message.id, newContent);
                             }
                           }}
                           className="p-1 text-gray-400 hover:text-white"

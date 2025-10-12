@@ -305,6 +305,21 @@ export default function Home() {
                   return convo;
                 })
               );
+            } else if (eventType === 'searching') {
+              // Handle searching event
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.thinking = '搜索中...'; // Set searching status
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
             }
             // Add other event types here if needed
           } else if (line.startsWith('data: ')) {
@@ -598,6 +613,21 @@ export default function Home() {
                       lastMessage.thinking = '思考中...'; // Set thinking status
                     } else {
                       updatedMessages.push({ id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' });
+                    }
+                    return { ...convo, messages: updatedMessages };
+                  }
+                  return convo;
+                })
+              );
+            } else if (eventType === 'searching') {
+              // Handle searching event
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id === activeConversationId) {
+                    const updatedMessages = [...convo.messages];
+                    const lastMessage = updatedMessages[updatedMessages.length - 1];
+                    if (lastMessage && lastMessage.role === 'assistant') {
+                      lastMessage.thinking = '搜索中...'; // Set searching status
                     }
                     return { ...convo, messages: updatedMessages };
                   }

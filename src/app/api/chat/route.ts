@@ -259,6 +259,7 @@ export async function POST(req: NextRequest) {
 
         // If a tool call was detected and accumulated
         if (toolCallMessage) {
+          controller.enqueue(new TextEncoder().encode('event: thinking\n\n'));
           try {
             // Reconstruct the full tool_calls array
             toolCallMessage.tool_calls = accumulatedToolCalls.reduce((acc: any[], current: any) => {
@@ -286,6 +287,7 @@ export async function POST(req: NextRequest) {
             let thinkingMessage = '思考中...';
             if (toolName === 'search') {
               thinkingMessage = `正在搜索: ${toolArgs.query}`;
+              controller.enqueue(new TextEncoder().encode('event: searching\n\n'));
             } else if (toolName === 'get_daily_news') {
               thinkingMessage = `正在获取每日新闻...`;
             }

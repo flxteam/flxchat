@@ -699,7 +699,8 @@ export default function Home() {
       }
     } finally {
         setIsGenerating(false);
-      }abortControllerRef.current = null;
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -947,7 +948,7 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
-      </main>
+     </main>
     </div>
   );
 }

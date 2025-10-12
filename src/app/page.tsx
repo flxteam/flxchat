@@ -719,7 +719,7 @@ export default function Home() {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")}
-                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200"
+                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 text-black dark:text-white rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200"
                 rows={1}
                 disabled={isLoading || isTranscribing}
               />

@@ -341,7 +341,7 @@ export default function Home() {
     // You might want to trigger a resubmit here if the user wants to continue the conversation from the edited point.
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
   };
 

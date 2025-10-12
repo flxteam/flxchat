@@ -46,7 +46,8 @@ async function performSearch(query: string) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messages, systemPrompt, modelId, useSearch, useThinkingMode } = body;
+  const { messages, systemPrompt, useSearch, useThinkingMode } = body;
+  const modelId = body.modelId || 'Qwen/Qwen3-8B'; // 默认模型改为 Qwen/Qwen3-8B
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
@@ -138,10 +139,23 @@ export async function POST(req: NextRequest) {
     requestBody.stream = false;
   } else {
     requestBody.stream = true;
+    // 仅 Qwen 系模型支持 include_thinking
     if (useThinkingMode) {
-      requestBody.stream_options = {
-        include_thinking: true,
-      };
+      if (/^Qwen/i.test(modelId)) {
+        requestBody.stream_options = { include_thinking: true };
+      } else {
+        // 非 Qwen 系模型不支持思考模式，忽略 stream_options
+        if (requestBody.stream_options) {
+          delete requestBody.stream_options;
+        }
+        // 可选：在日志中提示
+        console.warn('当前模型不支持思考模式:', modelId);
+      }
+    } else {
+      // 未开启思考模式，确保不携带 stream_options
+      if (requestBody.stream_options) {
+        delete requestBody.stream_options;
+      }
     }
   }
 
@@ -199,6 +213,7 @@ export async function POST(req: NextRequest) {
                             finish_reason: responseData.choices?.[0]?.finish_reason
                         }]
                     };
+                    console.log('Manually constructed chunk:', JSON.stringify(chunk));
                     controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
                     controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
                     controller.close();
@@ -233,10 +248,10 @@ export async function POST(req: NextRequest) {
           if (done) {
             break;
           }
-          // Manually process and forward the stream
           const chunk = decoder.decode(value, { stream: true });
-          // Here you could inspect the chunk for 'event: thinking' if needed,
-          -          // but for now, we just forward everything.
+          if (chunk.includes('[DONE]')) {
+            break;
+          }
           controller.enqueue(value);
         }
         controller.close();

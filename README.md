@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://feli.qzz.io"><strong>🌐 查看官网 & Live Demo</strong></a>
+  <a href="https://ai.feli.qzz.io"><strong>🌐 在线体验 & Live Demo</strong></a>
 </p>
 
 ---

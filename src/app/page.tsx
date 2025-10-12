@@ -345,6 +345,88 @@ export default function Home() {
     setInput(e.target.value);
   };
 
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleStartRecording = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          await handleSendAudio(audioBlob);
+          // Stop all tracks on the stream
+          stream.getTracks().forEach(track => track.stop());
+        };
+        audioChunksRef.current = [];
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        alert("无法访问麦克风，请检查权限。");
+      }
+    } else {
+      alert("您的浏览器不支持录音功能。");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+
+    try {
+      const response = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '语音识别失败');
+      }
+
+      const data = await response.json();
+      setInput(prevInput => prevInput + data.text);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (input.trim() && !isLoading) {
+        event.currentTarget.form?.requestSubmit();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
   const handleNewChat = () => {
     const newConversation: Conversation = {
       id: uuidv4(),
@@ -630,32 +712,54 @@ export default function Home() {
                 自定义提示词
               </button>
             </div>
-            <div className="flex items-center">
-              <input
-                type="text"
-                placeholder="输入你的消息..."
+            <div className="relative w-full">
+              <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={handleInputChange}
-                disabled={isLoading}
-                className="flex-1 p-3 bg-gray-700 rounded-l-lg focus:outline-none disabled:opacity-50"
+                onKeyDown={handleKeyDown}
+                placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")}
+                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200"
+                rows={1}
+                disabled={isLoading || isTranscribing}
               />
-              {isLoading ? (
-                <button 
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                <button
                   type="button"
-                  onClick={handleStopGenerating}
-                  className="px-4 py-3 bg-red-600 text-white rounded-r-lg hover:bg-red-700 focus:outline-none"
-                >
-                  停止
+                  onMouseDown={handleStartRecording}
+                  onMouseUp={handleStopRecording}
+                  onTouchStart={handleStartRecording}
+                  onTouchEnd={handleStopRecording}
+                  disabled={isLoading || isTranscribing}
+                  className={`p-2 rounded-full transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
+                  {isTranscribing ? (
+                    <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
+                    </svg>
+                  )}
                 </button>
-              ) : (
-                <button 
-                  type="submit"
-                  disabled={!input.trim()}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
-                >
-                  发送
-                </button>
-              )}
+                {isLoading ? (
+                  <button 
+                    type="button"
+                    onClick={handleStopGenerating}
+                    className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 flex items-center justify-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+                  </button>
+                ) : (
+                  <button 
+                    type="submit" 
+                    disabled={!input.trim() || isTranscribing}
+                    className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           </form>
         </footer>

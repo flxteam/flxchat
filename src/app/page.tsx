@@ -68,15 +68,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
-  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const messages = activeConversation ? activeConversation.messages : [];
-
-  const toggleHistoryCollapse = () => {
-    setIsHistoryCollapsed(!isHistoryCollapsed);
-  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -167,8 +162,6 @@ export default function Home() {
     setConversations(prev => [...prev, newConversation]);
     setActiveConversationId(newConversation.id);
   };
-
-  const handleSubmit = async (e: FormEvent) => {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -270,15 +263,8 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      <History 
-        conversations={conversations} 
-        activeConversationId={activeConversationId} 
-        setActiveConversationId={setActiveConversationId} 
-        setConversations={setConversations}
-        isCollapsed={isHistoryCollapsed}
-        toggleCollapse={toggleHistoryCollapse}
-      />
-      <div className={`relative flex flex-1 flex-col transition-all duration-300 ${isHistoryCollapsed ? 'ml-16' : 'ml-64'}`}>
+      <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
+      <div className="relative flex flex-1 flex-col">
         <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
           <h1 className="text-xl font-bold">FLXChat</h1>
           <div className="flex items-center gap-4">
@@ -317,7 +303,7 @@ export default function Home() {
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ duration: 0.3 }}
                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-3xl p-3 rounded-2xl ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                  <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
                     <div className="prose prose-invert max-w-none">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
@@ -378,10 +364,9 @@ export default function Home() {
                 disabled={isLoading || !input.trim()}
                 className="px-4 py-3 bg-blue-600 text-white rounded-r-lg disabled:bg-blue-400 hover:bg-blue-700 focus:outline-none"
               >
-                {isLoading ? '思考中...' : '发送'}
+                {isLoading ? '...' : '发送'}
               </button>
             </div>
-            {isLoading && <p className='text-center text-xs text-gray-400 mt-2'>AI 正在努力思考中，请稍候...</p>}
           </form>
         </footer>
 

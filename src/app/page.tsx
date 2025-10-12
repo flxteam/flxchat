@@ -212,6 +212,10 @@ export default function Home() {
     setIsPromptModalOpen(false);
   };
 
+  const handleResetPrompt = () => {
+    setModalSystemPrompt(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧le，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+  };
+
   const handleCopyMessage = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -914,19 +918,37 @@ export default function Home() {
                   className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-y"
                   rows={10}
                 />
-                <div className="flex justify-end gap-4 mt-6">
-                  <button
-                    onClick={handleClosePromptModal}
-                    className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSavePrompt}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
-                  >
-                    保存
-                  </button>
+                <div className="flex justify-between items-center mt-6">
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleResetPrompt}
+                      className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg mr-2"
+                    >
+                      复位
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setModalSystemPrompt('')}
+                      className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg"
+                    >
+                      清除
+                    </button>
+                  </div>
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleClosePromptModal}
+                      className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleSavePrompt}
+                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
+                    >
+                      保存
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

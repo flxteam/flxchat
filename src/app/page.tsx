@@ -768,24 +768,24 @@ export default function Home() {
 
                     {/* Message bubble */}
                     <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
-                      <div className="prose prose-invert max-w-none rounded-lg">
-                        {message.thinking && !message.content && (
-                          <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
-                            <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
-                            <span>{message.thinking}</span>
-                          </div>
-                        )}
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code: CodeBlock,
-                            a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
+                        <div className="prose prose-invert max-w-none rounded-lg">
+                          {message.thinking && !message.content && (
+                            <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
+                              <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
+                              <span>{message.thinking}</span>
+                            </div>
+                          )}
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code: CodeBlock,
+                              a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        </div>
                       </div>
-                    </div>
 
                     {/* Assistant message buttons */}
                     {message.role === 'assistant' && (

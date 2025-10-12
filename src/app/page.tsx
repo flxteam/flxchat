@@ -701,7 +701,7 @@ export default function Home() {
         setIsGenerating(false);
         abortControllerRef.current = null;
       }
-    }
+    };
   };
 
   return (

@@ -1,4 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
+
+const logFilePath = path.join(process.cwd(), 'debug.log');
+const log = (message: string) => {
+  fs.appendFileSync(logFilePath, `[${new Date().toISOString()}] ${message}\n`);
+};
+
+log('--- NEW REQUEST ---');
 
 
 
@@ -21,6 +30,24 @@ const searchTool = {
   },
 };
 
+const dailyNewsTool = {
+  type: 'function',
+  function: {
+    name: 'get_daily_news',
+    description: '获取指定平台的实时热点新闻。',
+    parameters: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          description: '平台代码，例如：baidu, weibo, zhihu, github 等。',
+        },
+      },
+      required: ['platform'],
+    },
+  },
+};
+
 async function performSearch(query: string) {
   try {
     const response = await fetch('https://google.serper.dev/search', {
@@ -38,16 +65,40 @@ async function performSearch(query: string) {
     // Extract relevant snippets or organic results
     const snippets = data.organic?.map((r: any) => r.snippet).join('\n') || 'No results found.';
     return snippets;
-  } catch (error) {
-    console.error('Search failed:', error);
+  } catch (error: any) {
+    log(`Search failed: ${error.message}`);
     return 'Search failed.';
+  }
+}
+
+async function getDailyNews(platform: string) {
+  try {
+    const response = await fetch(`https://orz.ai/api/v1/dailynews/?platform=${platform}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!response.ok) {
+      return `Error: Failed to fetch daily news. Status: ${response.status}`;
+      throw new Error(`Daily News API error: ${response.statusText}`);
+    }
+    const data = await response.json();
+    if (data.status !== '200') {
+      throw new Error(`Daily News API error: ${data.msg}`);
+    }
+    const news = data.data.map((item: any) => `标题：${item.title}，链接：${item.url}`).join('\n');
+    return news || '没有找到相关新闻。';
+  } catch (error: any) {
+    log(`Failed to get daily news: ${error.message}`);
+    return '获取新闻失败。';
   }
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const { messages, systemPrompt, useSearch, useThinkingMode } = body;
-  const modelId = body.modelId || 'Qwen/Qwen3-8B'; // 默认模型改为 Qwen/Qwen3-8B
+  const modelId = 'Qwen/Qwen3-8B'; // Hardcode modelId for testing
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
@@ -125,7 +176,7 @@ export async function POST(req: NextRequest) {
   const apiBase = 'https://api.siliconflow.cn/v1';
 
   if (!apiKey) {
-    console.error('Missing environment variable: SILICONFLOW_API_KEY');
+    log('Missing environment variable: SILICONFLOW_API_KEY');
     return new NextResponse('API configuration is missing on the server.', { status: 500 });
   }
 
@@ -135,32 +186,13 @@ export async function POST(req: NextRequest) {
   };
 
   if (useSearch) {
-    requestBody.tools = [searchTool];
-    requestBody.stream = false;
-  } else {
-    requestBody.stream = true;
-    // 仅 Qwen 系模型支持 include_thinking
-    if (useThinkingMode) {
-      if (/^Qwen/i.test(modelId)) {
-        requestBody.stream_options = { include_thinking: true };
-      } else {
-        // 非 Qwen 系模型不支持思考模式，忽略 stream_options
-        if (requestBody.stream_options) {
-          delete requestBody.stream_options;
-        }
-        // 可选：在日志中提示
-        console.warn('当前模型不支持思考模式:', modelId);
-      }
-    } else {
-      // 未开启思考模式，确保不携带 stream_options
-      if (requestBody.stream_options) {
-        delete requestBody.stream_options;
-      }
-    }
+    requestBody.tools = [searchTool, dailyNewsTool];
+    requestBody.tool_choice = 'auto';
   }
+  requestBody.stream = true; // Always stream
 
   try {
-    let response = await fetch(`${apiBase}/chat/completions`, {
+    const response = await fetch(`${apiBase}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -169,65 +201,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(requestBody),
     });
 
-    // Check for tool calls if search is enabled
-    if (useSearch) {
-        const responseData = await response.json();
-        const toolCall = responseData.choices?.[0]?.message?.tool_calls?.[0];
-
-        if (toolCall && toolCall.function.name === 'search') {
-            const { query } = JSON.parse(toolCall.function.arguments);
-            const searchResult = await performSearch(query);
-
-            // Add tool call and result to messages
-            const messagesWithToolResults = [...finalMessages];
-            messagesWithToolResults.push(responseData.choices[0].message); // Add AI's tool request
-            messagesWithToolResults.push({
-                role: 'tool',
-                tool_call_id: toolCall.id,
-                content: searchResult,
-            });
-
-            // Make a second call with the search result, this time streamed
-            response = await fetch(`${apiBase}/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                },
-                body: JSON.stringify({
-                    model: modelId,
-                    messages: messagesWithToolResults,
-                    stream: true, // Get the final answer as a stream
-                }),
-            });
-        } else {
-            // If no tool call, we need to convert the non-streamed response back to a stream
-            // that mimics the format of a real stream.
-            const stream = new ReadableStream({
-                start(controller) {
-                    const content = responseData.choices?.[0]?.message?.content || '';
-                    const chunk = {
-                        choices: [{
-                            delta: { content: content },
-                            index: 0,
-                            finish_reason: responseData.choices?.[0]?.finish_reason
-                        }]
-                    };
-                    console.log('Manually constructed chunk:', JSON.stringify(chunk));
-                    controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk)}\n\n`));
-                    controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-                    controller.close();
-                }
-            });
-            return new Response(stream, {
-                headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
-            });
-        }
-    }
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('SiliconFlow API error:', errorText);
+      log(`SiliconFlow API error: ${errorText}`);
       return new Response(JSON.stringify({ error: 'SiliconFlow API error', details: errorText }), {
         status: response.status,
         headers: { 'Content-Type': 'application/json' },
@@ -236,24 +212,123 @@ export async function POST(req: NextRequest) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        if (!response.body) {
-          controller.close();
-          return;
-        }
-        const reader = response.body.getReader();
+        const reader = response.body!.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
+        let toolCallMessage: any = null;
+        let accumulatedToolCalls: any[] = [];
 
+        const pipeThrough = async (stream: ReadableStream<Uint8Array>) => {
+          const reader = stream.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        };
+
+        let firstChunkProcessed = false;
         while (true) {
           const { done, value } = await reader.read();
-          if (done) {
-            break;
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.substring(6);
+            if (data.trim() === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta;
+
+              if (delta?.tool_calls) {
+                if (!firstChunkProcessed) {
+                  firstChunkProcessed = true;
+                  // This is the first sign of a tool call. We will handle it after the stream ends.
+                  toolCallMessage = { role: 'assistant', content: null, tool_calls: [] };
+                }
+                accumulatedToolCalls.push(...delta.tool_calls);
+              } else if (!toolCallMessage) {
+                // Not a tool call, just a regular message, so enqueue it.
+                controller.enqueue(new TextEncoder().encode(line + '\n'));
+              }
+            } catch (e) {
+              // In case of partial JSON, just continue buffering.
+            }
           }
-          const chunk = decoder.decode(value, { stream: true });
-          if (chunk.includes('[DONE]')) {
-            break;
-          }
-          controller.enqueue(value);
         }
+
+        // If a tool call was detected and accumulated
+        if (toolCallMessage) {
+          try {
+            // Reconstruct the full tool_calls array
+            toolCallMessage.tool_calls = accumulatedToolCalls.reduce((acc: any[], current: any) => {
+              if (current.index !== undefined) {
+                if (!acc[current.index]) {
+                  acc[current.index] = { id: '', type: 'function', function: { name: '', arguments: '' } };
+                }
+                const tool = acc[current.index];
+                if (current.id) tool.id = current.id;
+                if (current.function?.name) tool.function.name = current.function.name;
+                if (current.function?.arguments) tool.function.arguments += current.function.arguments;
+              }
+              return acc;
+            }, []);
+            
+            log("--- Tool Call Detected ---");
+            log(`Reconstructed Tool Call: ${JSON.stringify(toolCallMessage.tool_calls, null, 2)}`);
+
+            const toolCall = toolCallMessage.tool_calls[0];
+            
+            log(`Raw Arguments String: ${toolCall.function.arguments}`);
+            const toolArgs = JSON.parse(toolCall.function.arguments);
+            const toolName = toolCall.function.name;
+
+            let thinkingMessage = '思考中...';
+            if (toolName === 'search') {
+              thinkingMessage = `正在搜索: ${toolArgs.query}`;
+            } else if (toolName === 'get_daily_news') {
+              thinkingMessage = `正在获取每日新闻...`;
+            }
+            controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ thinking: thinkingMessage })}\n\n`));
+
+            let toolResult;
+            if (toolName === 'search') {
+              toolResult = await performSearch(toolArgs.query);
+            } else if (toolName === 'get_daily_news') {
+              toolResult = await getDailyNews(toolArgs.platform);
+            } else {
+              toolResult = { error: `Unknown tool: ${toolName}` };
+            }
+            
+            log(`Tool Result: ${JSON.stringify(toolResult)}`);
+
+            const newMessages = [
+              ...finalMessages,
+              toolCallMessage,
+              { role: 'tool', content: JSON.stringify(toolResult), tool_call_id: toolCall.id }
+            ];
+
+            const secondResponse = await fetch(`${apiBase}/chat/completions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+              body: JSON.stringify({ ...requestBody, messages: newMessages, tools: undefined, tool_choice: undefined, stream: true }),
+            });
+
+            if (secondResponse.body) {
+              await pipeThrough(secondResponse.body);
+            }
+          } catch (e: any) {
+            log(`!!! ERROR during tool processing !!!: ${e.message}`);
+            const errorMessage = `data: ${JSON.stringify({ error: "处理工具调用时出错" })}\n\n`;
+            controller.enqueue(new TextEncoder().encode(errorMessage));
+          }
+        }
+
         controller.close();
       },
     });
@@ -262,8 +337,8 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
     });
 
-  } catch (error) {
-    console.error('Error calling SiliconFlow API:', error);
+  } catch (error: any) {
+    log(`!!! Top-level error calling SiliconFlow API !!!: ${error.message}`);
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

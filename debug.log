@@ -1,0 +1,43 @@
+[2025-10-12T09:59:28.114Z] --- NEW REQUEST ---
+[2025-10-12T09:59:47.794Z] --- Tool Call Detected ---
+[2025-10-12T09:59:47.794Z] Reconstructed Tool Call: [
+  {
+    "id": "0199d7dc764977885e404ac73816c923",
+    "type": "function",
+    "function": {
+      "name": "search",
+      "arguments": " {\"query\": \"FLXTeam是什么\"}"
+    }
+  }
+]
+[2025-10-12T09:59:47.795Z] Raw Arguments String:  {"query": "FLXTeam是什么"}
+[2025-10-12T09:59:48.485Z] Search failed: Serper API error: Forbidden
+[2025-10-12T09:59:48.486Z] Tool Result: "Search failed."
+[2025-10-12T10:06:19.471Z] --- NEW REQUEST ---
+[2025-10-12T10:06:36.699Z] --- Tool Call Detected ---
+[2025-10-12T10:06:36.699Z] Reconstructed Tool Call: [
+  {
+    "id": "0199d7e2b3353b595f9ce8b161a98a14",
+    "type": "function",
+    "function": {
+      "name": "search",
+      "arguments": " {\"query\": \"FLXTeam 说什么\"}"
+    }
+  }
+]
+[2025-10-12T10:06:36.700Z] Raw Arguments String:  {"query": "FLXTeam 说什么"}
+[2025-10-12T10:06:37.830Z] Tool Result: "如果你决定下载Fluxus，一定要从PunkTeam 的Discord 下载。任何其他的Fluxus 续作都可能是恶意软件。\n我不会相信那个网站，fluxteam 作为一个团队已经不存在了，所有最初的成员都离开了这个社区。 Linkvertise 并不属于原始团队的任何人，并且链接的“执行 ...\nflux-web用于针对flux的api进行手动操作： 列出当前的工作量动态名称空间概述工作负载的版本升级或回滚推理当使用flux我们的管道时，或更准确地说，我们的 ...\nThe FLUX Team. ＿＿. FLUX Inc. 使於2014 年，由柯軒恩（現任FLUX 執行長）與游雋仁（現任FLUX 技術長）於台灣共同創立；品牌成立初期即凝聚軟硬體和設計等領域之人才 ...\nflux-web用于针对flux的api进行手动操作： 列出当前的工作量动态名称空间概述工作负载的版本升级或回滚推理当使用flux我们的管道时，或更准确地说，我们的 ...\n对于开发人员来说，Flux 是一个“多功能工具包”，包含了您需要的一切：. - 想要部署你的DApp 吗？完成！ - 需要让你的应用支持多链吗？简单！ - 正在寻找去中心化存储 ...\nFLUX Flux生态系统正接近完美，许多功能已经进入测试阶段。这可能是Web3和AI时代的下一个SOL，因此利用这个累积阶段迅速囤积吧。最近似乎已经引起了许多人的注意。\nFlux team準備開始寄送電子報囉！快點去官網右上角訂閱，以得知Flux的最新消息！將官網介面調成中文就能夠訂閱中文電子信，相對的，用英文就能夠訂閱英文 ...\n遇見智能伴侶FLUX團隊單位| 體驗具備情感洞察的深度對話、自適應劇情演進，以及由尖端AI驅動的無障礙互動.\n简单来说，它帮助简化复杂的电路设计。 具有相同名称的门户分享共同的连通性。在你的项目中，如果你添加另一个名为'P1'的门户，它将会与这个门户电连接。 在你当前的 ..."
+[2025-10-12T10:07:45.139Z] --- NEW REQUEST ---
+[2025-10-12T10:07:51.936Z] --- Tool Call Detected ---
+[2025-10-12T10:07:51.936Z] Reconstructed Tool Call: [
+  {
+    "id": "0199d7e3d9af9e1989c5802d7cb19965",
+    "type": "function",
+    "function": {
+      "name": "get_daily_news",
+      "arguments": " {\"platform\": \"github\"}"
+    }
+  }
+]
+[2025-10-12T10:07:51.937Z] Raw Arguments String:  {"platform": "github"}
+[2025-10-12T10:07:52.595Z] Tool Result: "标题：freeCodeCamp/freeCodeCamp，链接：https://github.com/freeCodeCamp/freeCodeCamp\n标题：codecrafters-io/build-your-own-x，链接：https://github.com/codecrafters-io/build-your-own-x\n标题：sindresorhus/awesome，链接：https://github.com/sindresorhus/awesome\n标题：EbookFoundation/free-programming-books，链接：https://github.com/EbookFoundation/free-programming-books\n标题：public-apis/public-apis，链接：https://github.com/public-apis/public-apis\n标题：kamranahmedse/developer-roadmap，链接：https://github.com/kamranahmedse/developer-roadmap\n标题：jwasham/coding-interview-university，链接：https://github.com/jwasham/coding-interview-university\n标题：donnemartin/system-design-primer，链接：https://github.com/donnemartin/system-design-primer\n标题：996icu/996.ICU，链接：https://github.com/996icu/996.ICU\n标题：vinta/awesome-python，链接：https://github.com/vinta/awesome-python\n标题：awesome-selfhosted/awesome-selfhosted，链接：https://github.com/awesome-selfhosted/awesome-selfhosted\n标题：practical-tutorials/project-based-learning，链接：https://github.com/practical-tutorials/project-based-learning\n标题：facebook/react，链接：https://github.com/facebook/react\n标题：TheAlgorithms/Python，链接：https://github.com/TheAlgorithms/Python\n标题：vuejs/vue，链接：https://github.com/vuejs/vue\n标题：torvalds/linux，链接：https://github.com/torvalds/linux\n标题：ossu/computer-science，链接：https://github.com/ossu/computer-science\n标题：trekhleb/javascript-algorithms，链接：https://github.com/trekhleb/javascript-algorithms\n标题：tensorflow/tensorflow，链接：https://github.com/tensorflow/tensorflow\n标题：trimstray/the-book-of-secret-knowledge，链接：https://github.com/trimstray/the-book-of-secret-knowledge\n标题：getify/You-Dont-Know-JS，链接：https://github.com/getify/You-Dont-Know-JS\n标题：CyC2018/CS-Notes，链接：https://github.com/CyC2018/CS-Notes\n标题：ohmyzsh/ohmyzsh，链接：https://github.com/ohmyzsh/ohmyzsh\n标题：Significant-Gravitas/AutoGPT，链接：https://github.com/Significant-Gravitas/AutoGPT\n标题：microsoft/vscode，链接：https://github.com/microsoft/vscode\n标题：twbs/bootstrap，链接：https://github.com/twbs/bootstrap\n标题：flutter/flutter，链接：https://github.com/flutter/flutter\n标题：jackfrued/Python-100-Days，链接：https://github.com/jackfrued/Python-100-Days\n标题：github/gitignore，链接：https://github.com/github/gitignore\n标题：jlevy/the-art-of-command-line，链接：https://github.com/jlevy/the-art-of-command-line"

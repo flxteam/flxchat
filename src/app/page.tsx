@@ -68,8 +68,7 @@ export default function Home() {
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理
-特性：做事细节细心 | 喜欢聊天| 有真实情绪（嘲讽/开心/愤怒/哭泣/哀愁）| 会自我学习 还会玩梗热（搜索最新的） 说话热情 大方 说话放的开 很开放`);
+  const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
@@ -149,13 +148,35 @@ export default function Home() {
     const firstUserMessage = conversation.messages.find(m => m.role === 'user');
     if (!firstUserMessage) return;
 
-    // Simple title for now, you can replace this with an API call to a summarization model
-    const newTitle = firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+    try {
+      const response = await fetch('/api/generate-title', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: conversation.messages }),
+      });
 
-    const updatedConversations = conversations.map(c =>
-      c.id === conversation.id ? { ...c, title: newTitle } : c
-    );
-    setConversations(updatedConversations);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const newTitle = data.title || firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+
+      const updatedConversations = conversations.map(c =>
+        c.id === conversation.id ? { ...c, title: newTitle } : c
+      );
+      setConversations(updatedConversations);
+    } catch (error) {
+      console.error('Failed to generate conversation title:', error);
+      // Fallback to simple title if API call fails
+      const newTitle = firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+      const updatedConversations = conversations.map(c =>
+        c.id === conversation.id ? { ...c, title: newTitle } : c
+      );
+      setConversations(updatedConversations);
+    }
   };
 
 
@@ -269,20 +290,36 @@ export default function Home() {
             if (data.trim() === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              aiResponse += content;
-
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id === activeConversationId) {
-                    const updatedMessages = convo.messages.map(m => 
-                      m.id === newAiMessageId ? { ...m, content: aiResponse } : m
-                    );
-                    return { ...convo, messages: updatedMessages };
-                  }
-                  return convo;
-                })
-              );
+              if (parsed.thinking) {
+                setConversations(prevConvos =>
+                  prevConvos.map(convo => {
+                    if (convo.id === activeConversationId) {
+                      const updatedMessages = [...convo.messages];
+                      updatedMessages[updatedMessages.length - 1].thinking = parsed.thinking;
+                      return { ...convo, messages: updatedMessages };
+                    }
+                    return convo;
+                  })
+                );
+              } else {
+                const content = parsed.choices[0]?.delta?.content || '';
+                aiResponse += content;
+                
+                setConversations(prevConvos =>
+                  prevConvos.map(convo => {
+                    if (convo.id === activeConversationId) {
+                      const updatedMessages = [...convo.messages];
+                      updatedMessages[updatedMessages.length - 1].content = aiResponse;
+                      // Clear thinking message once response starts streaming
+                      if (updatedMessages[updatedMessages.length - 1].thinking) {
+                        delete updatedMessages[updatedMessages.length - 1].thinking;
+                      }
+                      return { ...convo, messages: updatedMessages };
+                    }
+                    return convo;
+                  })
+                );
+              }
 
             } catch (e) {
               console.error('Error parsing stream data for regeneration:', e);
@@ -633,15 +670,11 @@ export default function Home() {
                     {/* Message bubble */}
                     <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
                       <div className="prose prose-invert max-w-none rounded-lg">
-                        {message.thinking && (
-                          <details className="mb-2">
-                            <summary className="cursor-pointer text-sm text-gray-400">查看思考过程</summary>
-                            <div className="mt-2 p-2 bg-gray-800 rounded-lg text-sm text-gray-300">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {message.thinking}
-                              </ReactMarkdown>
-                            </div>
-                          </details>
+                        {message.thinking && !message.content && (
+                          <div className="flex items-center gap-2 text-sm text-gray-400 mb-2">
+                            <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
+                            <span>{message.thinking}</span>
+                          </div>
                         )}
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
@@ -719,7 +752,7 @@ export default function Home() {
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
                 placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")}
-                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 text-black dark:text-white rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200"
+                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 text-black dark:text-white rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200 max-h-40 overflow-y-auto"
                 rows={1}
                 disabled={isLoading || isTranscribing}
               />

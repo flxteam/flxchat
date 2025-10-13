@@ -62,7 +62,6 @@ const MODELS = [
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [modelId, setModelId] = useState('qwen-turbo');
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);

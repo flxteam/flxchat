@@ -20,6 +20,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to get audio URL from external service', details: errorText }, { status: externalTtsResponse.status });
     }
 
+    const contentType = externalTtsResponse.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const errorText = await externalTtsResponse.text();
+      console.error('External TTS service did not return JSON. Response:', errorText);
+      return NextResponse.json({ error: 'External TTS service returned non-JSON response', details: errorText }, { status: 502 });
+    }
+
     const responseData = await externalTtsResponse.json();
     const audioUrl = responseData?.data?.audio_url;
 

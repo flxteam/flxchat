@@ -10,60 +10,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import History from '@/components/History';
 
-const AudioPlayer = ({ src }: { src: string }) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const togglePlayPause = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2 mt-2">
-      <audio
-        ref={audioRef}
-        src={src}
-        onLoadedData={() => setIsLoading(false)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
-        preload="metadata"
-      />
-      <button
-        onClick={togglePlayPause}
-        disabled={isLoading}
-        className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isLoading ? (
-          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        ) : isPlaying ? (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v4a1 1 0 11-2 0V8z" clipRule="evenodd" />
-          </svg>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-          </svg>
-        )}
-      </button>
-      <span className="text-xs text-gray-500 dark:text-gray-400">
-        {isLoading ? '语音生成中...' : (isPlaying ? '正在播放' : '播放语音')}
-      </span>
-    </div>
-  );
-};
-
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   const [isCopied, setIsCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
@@ -123,10 +69,32 @@ export default function Home() {
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
+  const [isTtsEnabled, setIsTtsEnabled] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isSpeakingRef = useRef(false);
+  const audioQueueRef = useRef<string[]>([]);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+
+  const playNextAudio = () => {
+    if (audioQueueRef.current.length > 0) {
+      isSpeakingRef.current = true;
+      const audioUrl = audioQueueRef.current.shift();
+      if (audioUrl) {
+        const audio = new Audio(audioUrl);
+        setCurrentAudio(audio);
+        audio.play();
+        audio.onended = () => {
+          setCurrentAudio(null);
+          playNextAudio();
+        };
+      }
+    } else {
+      isSpeakingRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
@@ -178,6 +146,9 @@ export default function Home() {
 
       const storedUseSearch = localStorage.getItem('useSearch');
       if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
+
+      const storedTtsEnabled = localStorage.getItem('isTtsEnabled');
+      if (storedTtsEnabled) setIsTtsEnabled(JSON.parse(storedTtsEnabled));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -196,10 +167,11 @@ export default function Home() {
       localStorage.setItem('modelId', modelId);
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
       localStorage.setItem('useSearch', JSON.stringify(useSearch));
+      localStorage.setItem('isTtsEnabled', JSON.stringify(isTtsEnabled));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch]);
+  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch, isTtsEnabled]);
 
   useEffect(() => {
     scrollToBottom();
@@ -289,39 +261,6 @@ export default function Home() {
     }
   };
 
-  const generateAndSetAudio = async (text: string, messageId: string) => {
-    if (!text || !activeConversationId) return;
-
-    try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-
-      if (response.ok) {
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
-
-        setConversations(prevConvos =>
-          prevConvos.map(convo => {
-            if (convo.id !== activeConversationId) return convo;
-            const updatedMessages = convo.messages.map(msg =>
-              msg.id === messageId ? { ...msg, audioUrl: audioUrl } : msg
-            );
-            return { ...convo, messages: updatedMessages };
-          })
-        );
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'TTS API request failed');
-      }
-    } catch (error) {
-      console.error('Failed to generate or set audio:', error);
-      // Optionally, update the UI to show that audio generation failed for this message
-    }
-  };
-
   const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
     if (!activeConversationId || isLoading) return;
 
@@ -377,12 +316,12 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let done = false;
       let aiResponse = '';
       let buffer = '';
+      let sentenceBuffer = '';
 
-      while (!done) {
-        const { done: readerDone, value } = await reader.read();
+      while (true) {
+        const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -424,6 +363,28 @@ export default function Home() {
               const parsed = JSON.parse(data);
               const content = parsed.choices[0]?.delta?.content || '';
               aiResponse += content;
+              sentenceBuffer += content;
+
+              const sentenceEndRegex = /[。？！.?!]/;
+              if (isTtsEnabled && sentenceEndRegex.test(sentenceBuffer)) {
+                const sentences = sentenceBuffer.split(sentenceEndRegex);
+                const completeSentences = sentences.slice(0, -1);
+                sentenceBuffer = sentences[sentences.length - 1] || '';
+
+                for (const sentence of completeSentences) {
+                  if (sentence.trim()) {
+                    const ttsResponse = await fetch(`/api/tts?text=${encodeURIComponent(sentence.trim())}`);
+                    if (ttsResponse.ok) {
+                      const audioBlob = await ttsResponse.blob();
+                      const audioUrl = URL.createObjectURL(audioBlob);
+                      audioQueueRef.current.push(audioUrl);
+                      if (!isSpeakingRef.current) {
+                        playNextAudio();
+                      }
+                    }
+                  }
+                }
+              }
 
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
@@ -445,17 +406,6 @@ export default function Home() {
           }
         }
       }
-
-      // TTS Generation after stream is complete
-      let contentForTts = aiResponse;
-      const thinkEndIndex = contentForTts.lastIndexOf('</think>');
-      if (thinkEndIndex !== -1) {
-        contentForTts = contentForTts.substring(thinkEndIndex + 8).trim();
-      }
-      if (contentForTts) {
-        generateAndSetAudio(contentForTts, assistantPlaceholder.id);
-      }
-
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
@@ -663,6 +613,12 @@ export default function Home() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsLoading(false);
+      if (currentAudio) {
+        currentAudio.pause();
+        setCurrentAudio(null);
+      }
+      audioQueueRef.current = [];
+      isSpeakingRef.current = false;
     }
   };
 
@@ -786,16 +742,6 @@ export default function Home() {
           }
         }
       }
-
-      // TTS Generation after stream is complete
-      let contentForTts = aiResponse;
-      const thinkEndIndex = contentForTts.lastIndexOf('</think>');
-      if (thinkEndIndex !== -1) {
-        contentForTts = contentForTts.substring(thinkEndIndex + 8).trim();
-      }
-      if (contentForTts) {
-        generateAndSetAudio(contentForTts, assistantPlaceholder.id);
-      }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
@@ -912,9 +858,6 @@ export default function Home() {
                             </div>
                           ) : null}
                         </div>
-                        {message.role === 'assistant' && message.audioUrl && (
-                          <AudioPlayer src={message.audioUrl} />
-                        )}
                       </div>
 
                     {/* Assistant message buttons */}
@@ -952,6 +895,11 @@ export default function Home() {
                   <input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">思考模式</span>
+                </label>
+                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer">
+                  <input id="tts-mode" type="checkbox" className="sr-only peer" checked={isTtsEnabled} onChange={(e) => setIsTtsEnabled(e.target.checked)} />
+                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span className="ms-3 text-sm font-medium text-gray-300">语音播报</span>
                 </label>
                 <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <input

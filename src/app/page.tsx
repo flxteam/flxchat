@@ -442,8 +442,13 @@ export default function Home() {
       }
 
       // TTS Generation after stream is complete
-      if (aiResponse) {
-        generateAndSetAudio(aiResponse, messageId);
+      let contentForTts = aiResponse;
+      const thinkEndIndex = contentForTts.lastIndexOf('</think>');
+      if (thinkEndIndex !== -1) {
+        contentForTts = contentForTts.substring(thinkEndIndex + 8).trim();
+      }
+      if (contentForTts) {
+        generateAndSetAudio(contentForTts, assistantPlaceholder.id);
       }
 
     } catch (error) {
@@ -777,8 +782,14 @@ export default function Home() {
         }
       }
 
-      if (aiResponse) {
-        generateAndSetAudio(aiResponse, assistantPlaceholder.id);
+      // TTS Generation after stream is complete
+      let contentForTts = aiResponse;
+      const thinkEndIndex = contentForTts.lastIndexOf('</think>');
+      if (thinkEndIndex !== -1) {
+        contentForTts = contentForTts.substring(thinkEndIndex + 8).trim();
+      }
+      if (contentForTts) {
+        generateAndSetAudio(contentForTts, assistantPlaceholder.id);
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {

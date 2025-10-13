@@ -443,7 +443,7 @@ export default function Home() {
 
       // TTS Generation after stream is complete
       if (aiResponse) {
-        generateAndSetAudio(aiResponse, lastMessage.id);
+        generateAndSetAudio(aiResponse, messageId);
       }
 
     } catch (error) {

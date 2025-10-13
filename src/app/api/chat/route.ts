@@ -109,19 +109,25 @@ async function getDailyNews(platform: string) {
 }
 
 async function executeCode(code: string) {
-  // In a real implementation, this would call a secure sandbox environment.
-  // For now, we'll just simulate it.
-  log(`--- Executing Code ---\n${code}\n--------------------`);
-  // Simulate a delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  // Simulate a result
-  const result = {
-    success: true,
-    output: '代码已成功执行（模拟）。\n输出结果：\nHello from the Code Interpreter!',
-    error: null,
-  };
-  log(`--- Code Execution Result ---\n${JSON.stringify(result, null, 2)}\n---------------------------`);
-  return result;
+  try {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ code }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.details || 'Code execution failed');
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    log(`!!! ERROR calling /api/execute !!!: ${error.message}`);
+    return { success: false, output: null, error: `调用代码执行接口失败: ${error.message}` };
+  }
 }
 
 

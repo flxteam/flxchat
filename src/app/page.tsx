@@ -69,28 +69,11 @@ export default function Home() {
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
-  const [useSpeech, setUseSpeech] = useState(false);
+  const [useTTS, setUseTTS] = useState(true); // Default to true
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const handleVoicesChanged = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-      // 优先选择中文普通话，如果找不到则选择第一个可用的声音
-      const preferredVoice = availableVoices.find(v => v.lang === 'zh-CN' && v.name.includes('Microsoft')) || availableVoices.find(v => v.lang === 'zh-CN') || availableVoices[0];
-      setSelectedVoice(preferredVoice);
-    };
-
-    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
-    handleVoicesChanged(); // 初始加载
-
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, []);
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
@@ -103,32 +86,6 @@ export default function Home() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const speak = async (text: string) => {
-    if (!useSpeech || !text.trim()) return;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    try {
-      const encodedText = encodeURIComponent(text);
-      const voice = '曼波'; // Using a fixed voice for now
-      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodedText}&voice=${voice}`);
-      const data = await response.json();
-
-      if (data.code === 200 && data.data.audio_url) {
-        const audio = new Audio(data.data.audio_url);
-        audioRef.current = audio;
-        await audio.play();
-      } else {
-        console.error("API speech synthesis failed:", data.message);
-      }
-    } catch (error) {
-      console.error("Error calling speech API:", error);
-    }
   };
 
   useEffect(() => {
@@ -169,8 +126,8 @@ export default function Home() {
       const storedUseSearch = localStorage.getItem('useSearch');
       if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
 
-      const storedUseSpeech = localStorage.getItem('useSpeech');
-      if (storedUseSpeech) setUseSpeech(JSON.parse(storedUseSpeech));
+      const storedUseTTS = localStorage.getItem('useTTS');
+      if (storedUseTTS) setUseTTS(JSON.parse(storedUseTTS));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -189,11 +146,11 @@ export default function Home() {
       localStorage.setItem('modelId', modelId);
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
       localStorage.setItem('useSearch', JSON.stringify(useSearch));
-      localStorage.setItem('useSpeech', JSON.stringify(useSpeech));
+      localStorage.setItem('useTTS', JSON.stringify(useTTS));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch]);
+  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch, useTTS]);
 
   useEffect(() => {
     scrollToBottom();
@@ -405,11 +362,6 @@ export default function Home() {
           }
         }
       }
-      
-      if (useSpeech && aiResponse) {
-        await speak(aiResponse);
-      }
-
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
@@ -429,35 +381,6 @@ export default function Home() {
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
-
-      // 在这里添加语音播报逻辑
-      const finalResponse = conversations.find(c => c.id === activeConversationId)?.messages.slice(-1)[0]?.content;
-      if (useSpeech && finalResponse && selectedVoice && !isLoading) {
-        speak(finalResponse);
-      }
-    }
-  };
-
-  const speak = (text: string) => {
-    if (!useSpeech || !selectedVoice) return;
-    window.speechSynthesis.cancel(); // 先停止之前的播报
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = selectedVoice;
-    utterance.pitch = 1;
-    utterance.rate = 1.1;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const fileArray = Array.from(e.target.files);
-      const compressedFiles = await Promise.all(
-        fileArray.map(async (file) => {
-          const compressedDataUrl = await compressImage(file);
-          return { id: uuidv4(), preview: compressedDataUrl, file };
-        })
-      );
-      setAttachments(prev => [...prev, ...compressedFiles]);
     }
   };
 
@@ -510,6 +433,7 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement>(null);
 
   const handleStartRecording = async () => {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -623,6 +547,55 @@ export default function Home() {
     });
   };
 
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: handleChatSubmit,
+    isLoading,
+    setInput,
+    append,
+  } = useChat({
+    id: activeConversationId,
+    api: '/api/chat',
+    initialMessages: conversations.find(c => c.id === activeConversationId)?.messages || [],
+    onFinish: async (message) => {
+      setConversations(prev => prev.map(c => 
+        c.id === activeConversationId 
+          ? { ...c, messages: [...c.messages.filter(m => m.id !== message.id), message] }
+          : c
+      ));
+      if (useTTS && message.role === 'assistant' && message.content) {
+        try {
+          const response = await fetch('/api/tts', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text: message.content, voice: '曼波' }),
+          });
+          const result = await response.json();
+          if (result.data && result.data.audio_url) {
+            if (audioPlayerRef.current) {
+              audioPlayerRef.current.src = result.data.audio_url;
+              audioPlayerRef.current.play().catch(e => console.error("音频播放失败:", e));
+            }
+          }
+        } catch (error) {
+          console.error("TTS API 请求失败:", error);
+        }
+      }
+    },
+    body: {
+      modelId,
+      systemPrompt,
+      useSearch,
+    },
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  });
+
   useEffect(() => {
     // Scroll to the bottom of the messages container
     if (textareaRef.current) {
@@ -642,25 +615,14 @@ export default function Home() {
   };
 
   const handleStopGenerating = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-      setIsLoading(false);
-    }
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    // Vercel AI SDK does not directly expose abort controller, 
+    // but stopping is handled by the SDK when a new message is sent.
+    // For now, we can just set loading to false.
+    setIsLoading(false); 
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
     if (!input.trim() || !activeConversationId || isLoading) return;
 
     const currentConversation = conversations.find(c => c.id === activeConversationId);
@@ -673,166 +635,61 @@ export default function Home() {
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
     const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput, attachments: attachments.map(a => a.preview) };
-    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
-
-    const messagesForApi = [...currentConversation.messages, userMessageForApi];
-
+    
     setConversations(prevConvos =>
       prevConvos.map(c =>
         c.id === activeConversationId
-          ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] }
+          ? { ...c, messages: [...c.messages, userMessageForDisplay] }
           : c
       )
     );
+
+    handleChatSubmit(e, {
+      data: {
+        modelId,
+        systemPrompt,
+        useSearch,
+        attachments: attachments.map(a => a.preview),
+      }
+    });
+
     setInput('');
     setAttachments([]);
-    setIsLoading(true);
+  };
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          messages: messagesForApi,
-          systemPrompt,
-          modelId,
-          useSearch,
-          useThinkingMode,
-          attachments: attachments.map(a => a.preview)
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to get response from server.');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-
-          if (line.startsWith('event: searching')) {
-            setConversations(prevConvos =>
-              prevConvos.map(convo => {
-                if (convo.id !== activeConversationId) return convo;
-                const updatedMessages = [...convo.messages];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
-                if (lastMessage && lastMessage.role === 'assistant') {
-                  lastMessage.thinking = '搜索中...';
-                }
-                return { ...convo, messages: updatedMessages };
-              })
-            );
-          } else if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-            if (data.trim() === '[DONE]') {
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage) {
-                    delete lastMessage.thinking;
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
-              break;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              aiResponse += content;
-
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage && lastMessage.role === 'assistant') {
-                    lastMessage.content = aiResponse;
-                    if (aiResponse && lastMessage.thinking) {
-                      delete lastMessage.thinking;
-                    }
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
-            } catch (e) {
-              console.error('Error parsing stream data:', e);
-            }
-          }
-        }
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          console.error(error);
-          setConversations(prevConvos =>
-            prevConvos.map(convo => {
-              if (convo.id !== activeConversationId) return convo;
-              const updatedMessages = [...convo.messages];
-              const lastMessage = updatedMessages[updatedMessages.length - 1];
-              if (lastMessage && lastMessage.role === 'assistant') {
-                lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
-                delete lastMessage.thinking;
-              }
-              return { ...convo, messages: updatedMessages };
-            })
-          );
-        }
-      } finally {
-        setIsLoading(false);
-        abortControllerRef.current = null;
-      }
-    };
-
-    return (
-      <div className="flex h-screen bg-gray-900 text-white">
-        <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
-        <div className="relative flex flex-1 flex-col">
-          <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
-            <h1 className="text-xl font-bold">FLXChat</h1>
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <select
-                  value={modelId}
-                  onChange={(e) => setModelId(e.target.value)}
-                  className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
-                >
-                  {MODELS.map((model) => (
-                    <option key={model.id} value={model.id}>{model.name}</option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-              </div>
-              <button 
-                onClick={handleNewChat}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
+  return (
+    <div className="flex h-screen bg-gray-900 text-white">
+      <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
+      <div className="relative flex flex-1 flex-col">
+        <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
+          <h1 className="text-xl font-bold">FLXChat</h1>
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              <select
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
               >
-                新对话
-              </button>
+                {MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
             </div>
-          </header>
+            <button 
+              onClick={handleNewChat}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
+            >
+              新对话
+            </button>
+          </div>
+        </header>
 
-          <main className="flex-1 overflow-y-auto p-4">
-            <div className="flex flex-col space-y-4">
-              <AnimatePresence>
+        <main className="flex-1 overflow-y-auto p-4">
+          <div className="flex flex-col space-y-4">
+            <AnimatePresence>
                 {messages.map((message) => (
                   <motion.div
                     key={message.id}
@@ -913,6 +770,13 @@ export default function Home() {
                         >
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
                         </button>
+                        <button
+                          onClick={() => playTTS(message.content)}
+                          className="p-1 text-gray-400 hover:text-white"
+                          title="朗读"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        </button>
                       </div>
                     )}
                   </motion.div>
@@ -944,8 +808,8 @@ export default function Home() {
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
                 </label>
-                <label htmlFor="speech-mode" className="inline-flex items-center cursor-pointer">
-                  <input id="speech-mode" type="checkbox" className="sr-only peer" checked={useSpeech} onChange={(e) => setUseSpeech(e.target.checked)} />
+                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer">
+                  <input id="tts-mode" type="checkbox" className="sr-only peer" checked={useTTS} onChange={(e) => setUseTTS(e.target.checked)} />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">语音播报</span>
                 </label>
@@ -1060,6 +924,8 @@ export default function Home() {
             </div>
           </form>
         </footer>
+
+        <audio ref={audioPlayerRef} className="hidden" />
 
         <AnimatePresence>
           {isPromptModalOpen && (

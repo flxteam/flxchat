@@ -73,6 +73,26 @@ export default function Home() {
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [useSpeech, setUseSpeech] = useState(true);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+
+  useEffect(() => {
+    const handleVoicesChanged = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+      // 优先选择中文普通话，如果找不到则选择第一个可用的声音
+      const preferredVoice = availableVoices.find(v => v.lang === 'zh-CN' && v.name.includes('Microsoft')) || availableVoices.find(v => v.lang === 'zh-CN') || availableVoices[0];
+      setSelectedVoice(preferredVoice);
+    };
+
+    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+    handleVoicesChanged(); // 初始加载
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
@@ -376,6 +396,35 @@ export default function Home() {
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
+
+      // 在这里添加语音播报逻辑
+      const finalResponse = conversations.find(c => c.id === activeConversationId)?.messages.slice(-1)[0]?.content;
+      if (useSpeech && finalResponse && selectedVoice && !isLoading) {
+        speak(finalResponse);
+      }
+    }
+  };
+
+  const speak = (text: string) => {
+    if (!useSpeech || !selectedVoice) return;
+    window.speechSynthesis.cancel(); // 先停止之前的播报
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = selectedVoice;
+    utterance.pitch = 1;
+    utterance.rate = 1.1;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const fileArray = Array.from(e.target.files);
+      const compressedFiles = await Promise.all(
+        fileArray.map(async (file) => {
+          const compressedDataUrl = await compressImage(file);
+          return { id: uuidv4(), preview: compressedDataUrl, file };
+        })
+      );
+      setAttachments(prev => [...prev, ...compressedFiles]);
     }
   };
 
@@ -852,6 +901,11 @@ export default function Home() {
                   />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
+                </label>
+                <label htmlFor="speech-mode" className="inline-flex items-center cursor-pointer">
+                  <input id="speech-mode" type="checkbox" className="sr-only peer" checked={useSpeech} onChange={(e) => setUseSpeech(e.target.checked)} />
+                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span className="ms-3 text-sm font-medium text-gray-300">语音播报</span>
                 </label>
               </div>
               <button

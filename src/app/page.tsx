@@ -500,39 +500,43 @@ export default function Home() {
 
   const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const img = new Image();
+      const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.onload = () => {
+        URL.revokeObjectURL(img.src); // Revoke Object URL after loading
         const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
         let { width, height } = img;
+        const MAX_WIDTH = 2048;
+        const MAX_HEIGHT = 2048;
 
         if (width > height) {
-          if (width > maxSize) {
-            height = Math.round((height * maxSize) / width);
-            width = maxSize;
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
           }
         } else {
-          if (height > maxSize) {
-            width = Math.round((width * maxSize) / height);
-            height = maxSize;
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
           }
         }
 
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          URL.revokeObjectURL(img.src); // Revoke on error
-          return reject(new Error('Failed to get canvas context'));
-        }
+
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Adjust quality here
-        URL.revokeObjectURL(img.src); // Revoke after use
-        resolve(dataUrl);
+
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
       };
-      img.onerror = (error) => {
-        URL.revokeObjectURL(img.src); // Revoke on error
-        reject(error);
+      img.onerror = (err) => {
+        URL.revokeObjectURL(img.src); // Revoke Object URL on error
+        reject(err);
       };
     });
   };

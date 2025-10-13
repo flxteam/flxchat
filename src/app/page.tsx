@@ -842,7 +842,14 @@ export default function Home() {
                   <span className="ms-3 text-sm font-medium text-gray-300">思考模式</span>
                 </label>
                 <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <input id="search-mode" type="checkbox" className="sr-only peer" checked={useSearch} onChange={(e) => setUseSearch(e.target.checked)} disabled={attachments.length > 0} />
+                  <input
+                    id="search-mode"
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={useSearch}
+                    onChange={(e) => setUseSearch(e.target.checked)}
+                    disabled={attachments.length > 0 || !['Qwen/Qwen3-8B', 'THUDM/GLM-Z1-9B-0414', 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', 'THUDM/GLM-4.1V-9B-Thinking'].includes(modelId)}
+                  />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
                 </label>

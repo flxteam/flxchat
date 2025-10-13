@@ -290,26 +290,31 @@ export default function Home() {
   };
 
   const generateAndSetAudio = async (text: string, messageId: string) => {
-    if (!activeConversationId) return;
+    if (!text || !activeConversationId) return;
+
     try {
-      const encodedText = encodeURIComponent(text);
-      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodedText}&voice=体虚生`);
-      if (!response.ok) {
-        throw new Error(`TTS API request failed with status ${response.status}`);
-      }
-      const data = await response.json();
-      if (data.code === 200 && data.data.audio_url) {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+
         setConversations(prevConvos =>
           prevConvos.map(convo => {
             if (convo.id !== activeConversationId) return convo;
             const updatedMessages = convo.messages.map(msg =>
-              msg.id === messageId ? { ...msg, audioUrl: data.data.audio_url } : msg
+              msg.id === messageId ? { ...msg, audioUrl: audioUrl } : msg
             );
             return { ...convo, messages: updatedMessages };
           })
         );
       } else {
-        throw new Error(data.message || 'TTS API did not return a valid audio URL');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'TTS API request failed');
       }
     } catch (error) {
       console.error('Failed to generate or set audio:', error);

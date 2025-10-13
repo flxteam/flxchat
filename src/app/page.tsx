@@ -374,9 +374,10 @@ export default function Home() {
       const decoder = new TextDecoder();
       let done = false;
       let aiResponse = '';
+      let buffer = '';
 
       while (!done) {
-        const { done, value } = await reader.read();
+        const { done: readerDone, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });

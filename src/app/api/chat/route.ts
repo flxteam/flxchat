@@ -43,6 +43,24 @@ const dailyNewsTool = {
   },
 };
 
+const codeInterpreterTool = {
+  type: 'function',
+  function: {
+    name: 'execute_code',
+    description: 'Execute Python code in a sandboxed environment and return the output.',
+    parameters: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'The Python code to execute.',
+        },
+      },
+      required: ['code'],
+    },
+  },
+};
+
 async function performSearch(query: string) {
   try {
     const response = await fetch('https://google.serper.dev/search', {
@@ -90,9 +108,26 @@ async function getDailyNews(platform: string) {
   }
 }
 
+async function executeCode(code: string) {
+  // In a real implementation, this would call a secure sandbox environment.
+  // For now, we'll just simulate it.
+  log(`--- Executing Code ---\n${code}\n--------------------`);
+  // Simulate a delay
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  // Simulate a result
+  const result = {
+    success: true,
+    output: '代码已成功执行（模拟）。\n输出结果：\nHello from the Code Interpreter!',
+    error: null,
+  };
+  log(`--- Code Execution Result ---\n${JSON.stringify(result, null, 2)}\n---------------------------`);
+  return result;
+}
+
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messages, systemPrompt, modelId, useSearch, useThinkingMode, attachments } = body;
+  const { messages, systemPrompt, modelId, useSearch, useCodeInterpreter, attachments } = body;
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
@@ -194,6 +229,9 @@ export async function POST(req: NextRequest) {
 
   if (useSearch) {
     requestBody.tools = [searchTool, dailyNewsTool];
+    requestBody.tool_choice = 'auto';
+  } else if (useCodeInterpreter) {
+    requestBody.tools = [codeInterpreterTool];
     requestBody.tool_choice = 'auto';
   }
   requestBody.stream = true; // Always stream
@@ -303,6 +341,10 @@ export async function POST(req: NextRequest) {
             } else if (toolName === 'get_daily_news') {
               thinkingMessage = `正在获取每日新闻...`;
             }
+            else if (toolName === 'execute_code') {
+              thinkingMessage = '正在执行代码...';
+              controller.enqueue(new TextEncoder().encode('event: executing_code\n\n'));
+            }
             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ thinking: thinkingMessage })}\n\n`));
 
             let toolResult;
@@ -310,6 +352,8 @@ export async function POST(req: NextRequest) {
               toolResult = await performSearch(toolArgs.query);
             } else if (toolName === 'get_daily_news') {
               toolResult = await getDailyNews(toolArgs.platform);
+            } else if (toolName === 'execute_code') {
+              toolResult = await executeCode(toolArgs.code);
             } else {
               toolResult = { error: `Unknown tool: ${toolName}` };
             }

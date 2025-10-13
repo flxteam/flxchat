@@ -10,6 +10,60 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import History from '@/components/History';
 
+const AudioPlayer = ({ src }: { src: string }) => {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const togglePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <audio
+        ref={audioRef}
+        src={src}
+        onLoadedData={() => setIsLoading(false)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        preload="metadata"
+      />
+      <button
+        onClick={togglePlayPause}
+        disabled={isLoading}
+        className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {isLoading ? (
+          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        ) : isPlaying ? (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v4a1 1 0 11-2 0V8z" clipRule="evenodd" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+          </svg>
+        )}
+      </button>
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        {isLoading ? '语音生成中...' : (isPlaying ? '正在播放' : '播放语音')}
+      </span>
+    </div>
+  );
+};
+
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   const [isCopied, setIsCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
@@ -62,13 +116,13 @@ const MODELS = [
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [modelId, setModelId] = useState('qwen-turbo');
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
-  const [useTTS, setUseTTS] = useState(true); // Default to true
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
@@ -124,9 +178,6 @@ export default function Home() {
 
       const storedUseSearch = localStorage.getItem('useSearch');
       if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
-
-      const storedUseTTS = localStorage.getItem('useTTS');
-      if (storedUseTTS) setUseTTS(JSON.parse(storedUseTTS));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -145,11 +196,10 @@ export default function Home() {
       localStorage.setItem('modelId', modelId);
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
       localStorage.setItem('useSearch', JSON.stringify(useSearch));
-      localStorage.setItem('useTTS', JSON.stringify(useTTS));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
-  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch, useTTS]);
+  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch]);
 
   useEffect(() => {
     scrollToBottom();
@@ -239,6 +289,34 @@ export default function Home() {
     }
   };
 
+  const generateAndSetAudio = async (text: string, messageId: string) => {
+    if (!activeConversationId) return;
+    try {
+      const encodedText = encodeURIComponent(text);
+      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodedText}&voice=体虚生`);
+      if (!response.ok) {
+        throw new Error(`TTS API request failed with status ${response.status}`);
+      }
+      const data = await response.json();
+      if (data.code === 200 && data.data.audio_url) {
+        setConversations(prevConvos =>
+          prevConvos.map(convo => {
+            if (convo.id !== activeConversationId) return convo;
+            const updatedMessages = convo.messages.map(msg =>
+              msg.id === messageId ? { ...msg, audioUrl: data.data.audio_url } : msg
+            );
+            return { ...convo, messages: updatedMessages };
+          })
+        );
+      } else {
+        throw new Error(data.message || 'TTS API did not return a valid audio URL');
+      }
+    } catch (error) {
+      console.error('Failed to generate or set audio:', error);
+      // Optionally, update the UI to show that audio generation failed for this message
+    }
+  };
+
   const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
     if (!activeConversationId || isLoading) return;
 
@@ -294,10 +372,10 @@ export default function Home() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      let done = false;
       let aiResponse = '';
-      let buffer = '';
 
-      while (true) {
+      while (!done) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -361,6 +439,12 @@ export default function Home() {
           }
         }
       }
+
+      // TTS Generation after stream is complete
+      if (aiResponse) {
+        generateAndSetAudio(aiResponse, lastMessage.id);
+      }
+
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
@@ -432,7 +516,6 @@ export default function Home() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const audioPlayerRef = useRef<HTMLAudioElement>(null);
 
   const handleStartRecording = async () => {
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -546,55 +629,6 @@ export default function Home() {
     });
   };
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    handleSubmit: handleChatSubmit,
-    isLoading,
-    setInput,
-    append,
-  } = useChat({
-    id: activeConversationId,
-    api: '/api/chat',
-    initialMessages: conversations.find(c => c.id === activeConversationId)?.messages || [],
-    onFinish: async (message) => {
-      setConversations(prev => prev.map(c => 
-        c.id === activeConversationId 
-          ? { ...c, messages: [...c.messages.filter(m => m.id !== message.id), message] }
-          : c
-      ));
-      if (useTTS && message.role === 'assistant' && message.content) {
-        try {
-          const response = await fetch('/api/tts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ text: message.content, voice: '曼波' }),
-          });
-          const result = await response.json();
-          if (result.data && result.data.audio_url) {
-            if (audioPlayerRef.current) {
-              audioPlayerRef.current.src = result.data.audio_url;
-              audioPlayerRef.current.play().catch(e => console.error("音频播放失败:", e));
-            }
-          }
-        } catch (error) {
-          console.error("TTS API 请求失败:", error);
-        }
-      }
-    },
-    body: {
-      modelId,
-      systemPrompt,
-      useSearch,
-    },
-    headers: {
-      'Content-Type': 'application/json',
-    }
-  });
-
   useEffect(() => {
     // Scroll to the bottom of the messages container
     if (textareaRef.current) {
@@ -614,13 +648,14 @@ export default function Home() {
   };
 
   const handleStopGenerating = () => {
-    // Vercel AI SDK does not directly expose abort controller, 
-    // but stopping is handled by the SDK when a new message is sent.
-    // For now, we can just set loading to false.
-    setIsLoading(false); 
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+    }
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !activeConversationId || isLoading) return;
 
@@ -634,26 +669,136 @@ export default function Home() {
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
     const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput, attachments: attachments.map(a => a.preview) };
-    
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
+
+    const messagesForApi = [...currentConversation.messages, userMessageForApi];
+
     setConversations(prevConvos =>
       prevConvos.map(c =>
         c.id === activeConversationId
-          ? { ...c, messages: [...c.messages, userMessageForDisplay] }
+          ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] }
           : c
       )
     );
-
-    handleChatSubmit(e, {
-      data: {
-        modelId,
-        systemPrompt,
-        useSearch,
-        attachments: attachments.map(a => a.preview),
-      }
-    });
-
     setInput('');
     setAttachments([]);
+    setIsLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          messages: messagesForApi,
+          systemPrompt,
+          modelId,
+          useSearch,
+          useThinkingMode,
+          attachments: attachments.map(a => a.preview)
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to get response from server.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+
+          if (line.startsWith('event: searching')) {
+            setConversations(prevConvos =>
+              prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                  lastMessage.thinking = '搜索中...';
+                }
+                return { ...convo, messages: updatedMessages };
+              })
+            );
+          } else if (line.startsWith('data: ')) {
+            const data = line.substring(6);
+            if (data.trim() === '[DONE]') {
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage) {
+                    delete lastMessage.thinking;
+                  }
+                  return { ...convo, messages: updatedMessages };
+                })
+              );
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              aiResponse += content;
+
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.content = aiResponse;
+                    if (aiResponse && lastMessage.thinking) {
+                      delete lastMessage.thinking;
+                    }
+                  }
+                  return { ...convo, messages: updatedMessages };
+                })
+              );
+            } catch (e) {
+              console.error('Error parsing stream data:', e);
+            }
+          }
+        }
+      }
+
+      if (aiResponse) {
+        generateAndSetAudio(aiResponse, assistantPlaceholder.id);
+      }
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        console.error(error);
+        setConversations(prevConvos =>
+          prevConvos.map(convo => {
+            if (convo.id !== activeConversationId) return convo;
+            const updatedMessages = [...convo.messages];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
+              delete lastMessage.thinking;
+            }
+            return { ...convo, messages: updatedMessages };
+          })
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
   };
 
   return (
@@ -750,6 +895,9 @@ export default function Home() {
                             </div>
                           ) : null}
                         </div>
+                        {message.role === 'assistant' && message.audioUrl && (
+                          <AudioPlayer src={message.audioUrl} />
+                        )}
                       </div>
 
                     {/* Assistant message buttons */}
@@ -768,13 +916,6 @@ export default function Home() {
                           title="重新生成"
                         >
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        </button>
-                        <button
-                          onClick={() => playTTS(message.content)}
-                          className="p-1 text-gray-400 hover:text-white"
-                          title="朗读"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
                         </button>
                       </div>
                     )}
@@ -806,11 +947,6 @@ export default function Home() {
                   />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
-                </label>
-                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer">
-                  <input id="tts-mode" type="checkbox" className="sr-only peer" checked={useTTS} onChange={(e) => setUseTTS(e.target.checked)} />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  <span className="ms-3 text-sm font-medium text-gray-300">语音播报</span>
                 </label>
               </div>
               <button
@@ -923,8 +1059,6 @@ export default function Home() {
             </div>
           </form>
         </footer>
-
-        <audio ref={audioPlayerRef} className="hidden" />
 
         <AnimatePresence>
           {isPromptModalOpen && (

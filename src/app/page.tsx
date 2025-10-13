@@ -74,25 +74,7 @@ export default function Home() {
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [useSpeech, setUseSpeech] = useState(true);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-
-  useEffect(() => {
-    const handleVoicesChanged = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      setVoices(availableVoices);
-      // 优先选择中文普通话，如果找不到则选择第一个可用的声音
-      const preferredVoice = availableVoices.find(v => v.lang === 'zh-CN' && v.name.includes('Microsoft')) || availableVoices.find(v => v.lang === 'zh-CN') || availableVoices[0];
-      setSelectedVoice(preferredVoice);
-    };
-
-    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
-    handleVoicesChanged(); // 初始加载
-
-    return () => {
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, []);
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
@@ -397,157 +379,29 @@ export default function Home() {
       setIsLoading(false);
       abortControllerRef.current = null;
 
-      // 在这里添加语音播报逻辑
-      const finalResponse = conversations.find(c => c.id === activeConversationId)?.messages.slice(-1)[0]?.content;
-      if (useSpeech && finalResponse && selectedVoice && !isLoading) {
-        speak(finalResponse);
+      if (useSpeech && aiResponse) {
+        speak(aiResponse);
       }
     }
   };
 
   const speak = (text: string) => {
-    if (!useSpeech || !selectedVoice) return;
-    window.speechSynthesis.cancel(); // 先停止之前的播报
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.voice = selectedVoice;
-    utterance.pitch = 1;
-    utterance.rate = 1.1;
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const fileArray = Array.from(e.target.files);
-      const compressedFiles = await Promise.all(
-        fileArray.map(async (file) => {
-          const compressedDataUrl = await compressImage(file);
-          return { id: uuidv4(), preview: compressedDataUrl, file };
-        })
-      );
-      setAttachments(prev => [...prev, ...compressedFiles]);
+    if (!useSpeech) return;
+    if (audio) {
+      audio.pause();
     }
+    const newAudio = new Audio(
+      `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&voice=曼波&text=${encodeURIComponent(text)}`
+    );
+    newAudio.play();
+    setAudio(newAudio);
   };
 
-  const handleDeleteMessage = (messageId: string) => {
-    if (!activeConversationId) return;
-
-    const updatedConversations = conversations.map(convo => {
-      if (convo.id === activeConversationId) {
-        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
-        if (messageIndex !== -1) {
-          // Remove the message and all subsequent messages
-          const updatedMessages = convo.messages.slice(0, messageIndex);
-          return { ...convo, messages: updatedMessages };
-        }
-      }
-      return convo;
-    });
-
-    setConversations(updatedConversations);
-  };
-
-  const handleSaveEdit = (messageId: string, newContent: string) => {
-    if (!activeConversationId || isLoading) return;
-
-    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
-    if (!convoToUpdate) return;
-
-    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
-
-    // Create a new message list, truncated and with the updated content
-    const newMessages = convoToUpdate.messages.slice(0, messageIndex + 1);
-    newMessages[messageIndex] = { ...newMessages[messageIndex], content: newContent };
-
-    // Update the state to show the edit and truncation immediately
-    setConversations(prev => prev.map(c =>
-      c.id === activeConversationId ? { ...c, messages: newMessages } : c
-    ));
-
-    // Then, trigger regeneration, passing the correct message list to avoid stale state issues
-    handleRegenerate(messageId, true, newMessages);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-  };
-
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const handleStartRecording = async () => {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          audioChunksRef.current.push(event.data);
-        };
-        mediaRecorderRef.current.onstop = async () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          audioChunksRef.current = [];
-          await handleSendAudio(audioBlob);
-          // Stop all tracks on the stream
-          stream.getTracks().forEach(track => track.stop());
-        };
-        audioChunksRef.current = [];
-        mediaRecorderRef.current.start();
-        setIsRecording(true);
-      } catch (err) {
-        console.error("Error accessing microphone:", err);
-        alert("无法访问麦克风，请检查权限。");
-      }
-    } else {
-      alert("您的浏览器不支持录音功能。");
-    }
-  };
-
-  const handleStopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  const handleSendAudio = async (audioBlob: Blob) => {
-    setIsTranscribing(true);
-    const formData = new FormData();
-    formData.append("file", audioBlob, "recording.webm");
-
-    try {
-      const response = await fetch('/api/audio/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '语音识别失败');
-      }
-
-      const data = await response.json();
-      setInput(prevInput => prevInput + data.text);
-    } catch (error) {
-      console.error("Error transcribing audio:", error);
-      alert(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsTranscribing(false);
-    }
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      if (input.trim() && !isLoading) {
-        event.currentTarget.form?.requestSubmit();
-      }
-    }
-  };
-
-  const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
+  const compressImage = async (
+    file: File,
+    maxWidth: number,
+    maxSize: number = 1024
+  ): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
@@ -614,10 +468,20 @@ export default function Home() {
       abortControllerRef.current = null;
       setIsLoading(false);
     }
+    if (audio) {
+      audio.pause();
+      setAudio(null);
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (audio) {
+      audio.pause();
+      setAudio(null);
+    }
+
     if (!input.trim() || !activeConversationId || isLoading) return;
 
     const currentConversation = conversations.find(c => c.id === activeConversationId);

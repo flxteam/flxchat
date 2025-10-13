@@ -71,28 +71,14 @@ export default function Home() {
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const [useCodeInterpreter, setUseCodeInterpreter] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
-      if (useSearch) setUseSearch(false);
-      if (useCodeInterpreter) setUseCodeInterpreter(false);
+      setUseSearch(false);
     }
-  }, [attachments, useSearch, useCodeInterpreter]);
-
-  useEffect(() => {
-    if (useSearch && useCodeInterpreter) {
-      setUseCodeInterpreter(false); // Disable interpreter if search is enabled
-    }
-  }, [useSearch]);
-
-  useEffect(() => {
-    if (useCodeInterpreter && useSearch) {
-      setUseSearch(false); // Disable search if interpreter is enabled
-    }
-  }, [useCodeInterpreter]);
+  }, [attachments, useSearch]);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId);
   const messages = activeConversation ? activeConversation.messages : [];
@@ -299,7 +285,7 @@ export default function Home() {
       });
 
       if (!response.ok || !response.body) {
-        throw new Error('Failed to get response from server.');
+        throw new Error('Failed to get response from server for regeneration.');
       }
 
       const reader = response.body.getReader();
@@ -366,7 +352,7 @@ export default function Home() {
                 })
               );
             } catch (e) {
-              console.error('Error parsing stream data:', e);
+              console.error('Error parsing stream data for regeneration:', e);
             }
           }
         }
@@ -380,7 +366,7 @@ export default function Home() {
             const updatedMessages = [...convo.messages];
             const lastMessage = updatedMessages[updatedMessages.length - 1];
             if (lastMessage && lastMessage.role === 'assistant') {
-              lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
+              lastMessage.content = `抱歉，重新生成出错了: ${(error as Error).message}`;
               delete lastMessage.thinking;
             }
             return { ...convo, messages: updatedMessages };
@@ -621,12 +607,10 @@ export default function Home() {
         body: JSON.stringify({
           messages: messagesForApi,
           systemPrompt,
-          model: modelId,
-          messages: updatedMessages,
-          systemPrompt,
+          modelId,
           useSearch,
-          useCodeInterpreter, // Add this line
-          attachments: attachments.map(a => a.preview),
+          useThinkingMode,
+          attachments: attachments.map(a => a.preview)
         }),
       });
 
@@ -868,18 +852,6 @@ export default function Home() {
                   />
                   <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                   <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
-                </label>
-                <label htmlFor="code-interpreter-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <input
-                    id="code-interpreter-mode"
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={useCodeInterpreter}
-                    onChange={(e) => setUseCodeInterpreter(e.target.checked)}
-                    disabled={attachments.length > 0}
-                  />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  <span className="ms-3 text-sm font-medium text-gray-300">代码解释器</span>
                 </label>
               </div>
               <button

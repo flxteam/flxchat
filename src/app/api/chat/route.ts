@@ -43,24 +43,6 @@ const dailyNewsTool = {
   },
 };
 
-const codeInterpreterTool = {
-  type: 'function',
-  function: {
-    name: 'execute_code',
-    description: 'Execute Python code in a sandboxed environment and return the output.',
-    parameters: {
-      type: 'object',
-      properties: {
-        code: {
-          type: 'string',
-          description: 'The Python code to execute.',
-        },
-      },
-      required: ['code'],
-    },
-  },
-};
-
 async function performSearch(query: string) {
   try {
     const response = await fetch('https://google.serper.dev/search', {
@@ -108,32 +90,9 @@ async function getDailyNews(platform: string) {
   }
 }
 
-async function executeCode(code: string) {
-  try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ code }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.details || 'Code execution failed');
-    }
-
-    return await response.json();
-  } catch (error: any) {
-    log(`!!! ERROR calling /api/execute !!!: ${error.message}`);
-    return { success: false, output: null, error: `调用代码执行接口失败: ${error.message}` };
-  }
-}
-
-
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { messages, systemPrompt, modelId, useSearch, useCodeInterpreter, attachments } = body;
+  const { messages, systemPrompt, modelId, useSearch, useThinkingMode, attachments } = body;
 
   if (!messages) {
     return new NextResponse('Messages are required', { status: 400 });
@@ -235,9 +194,6 @@ export async function POST(req: NextRequest) {
 
   if (useSearch) {
     requestBody.tools = [searchTool, dailyNewsTool];
-    requestBody.tool_choice = 'auto';
-  } else if (useCodeInterpreter) {
-    requestBody.tools = [codeInterpreterTool];
     requestBody.tool_choice = 'auto';
   }
   requestBody.stream = true; // Always stream
@@ -347,10 +303,6 @@ export async function POST(req: NextRequest) {
             } else if (toolName === 'get_daily_news') {
               thinkingMessage = `正在获取每日新闻...`;
             }
-            else if (toolName === 'execute_code') {
-              thinkingMessage = '正在执行代码...';
-              controller.enqueue(new TextEncoder().encode('event: executing_code\n\n'));
-            }
             controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ thinking: thinkingMessage })}\n\n`));
 
             let toolResult;
@@ -358,8 +310,6 @@ export async function POST(req: NextRequest) {
               toolResult = await performSearch(toolArgs.query);
             } else if (toolName === 'get_daily_news') {
               toolResult = await getDailyNews(toolArgs.platform);
-            } else if (toolName === 'execute_code') {
-              toolResult = await executeCode(toolArgs.code);
             } else {
               toolResult = { error: `Unknown tool: ${toolName}` };
             }

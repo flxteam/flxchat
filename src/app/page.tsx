@@ -69,12 +69,28 @@ export default function Home() {
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
+  const [useSpeech, setUseSpeech] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [useSpeech, setUseSpeech] = useState(true);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const handleVoicesChanged = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      setVoices(availableVoices);
+      // 优先选择中文普通话，如果找不到则选择第一个可用的声音
+      const preferredVoice = availableVoices.find(v => v.lang === 'zh-CN' && v.name.includes('Microsoft')) || availableVoices.find(v => v.lang === 'zh-CN') || availableVoices[0];
+      setSelectedVoice(preferredVoice);
+    };
+
+    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
+    handleVoicesChanged(); // 初始加载
+
+    return () => {
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (attachments.length > 0 && useSearch) {
@@ -87,6 +103,32 @@ export default function Home() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const speak = async (text: string) => {
+    if (!useSpeech || !text.trim()) return;
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    try {
+      const encodedText = encodeURIComponent(text);
+      const voice = '曼波'; // Using a fixed voice for now
+      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodedText}&voice=${voice}`);
+      const data = await response.json();
+
+      if (data.code === 200 && data.data.audio_url) {
+        const audio = new Audio(data.data.audio_url);
+        audioRef.current = audio;
+        await audio.play();
+      } else {
+        console.error("API speech synthesis failed:", data.message);
+      }
+    } catch (error) {
+      console.error("Error calling speech API:", error);
+    }
   };
 
   useEffect(() => {
@@ -126,6 +168,9 @@ export default function Home() {
 
       const storedUseSearch = localStorage.getItem('useSearch');
       if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
+
+      const storedUseSpeech = localStorage.getItem('useSpeech');
+      if (storedUseSpeech) setUseSpeech(JSON.parse(storedUseSpeech));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -144,6 +189,7 @@ export default function Home() {
       localStorage.setItem('modelId', modelId);
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
       localStorage.setItem('useSearch', JSON.stringify(useSearch));
+      localStorage.setItem('useSpeech', JSON.stringify(useSpeech));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
@@ -359,6 +405,11 @@ export default function Home() {
           }
         }
       }
+      
+      if (useSpeech && aiResponse) {
+        await speak(aiResponse);
+      }
+
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
@@ -379,29 +430,157 @@ export default function Home() {
       setIsLoading(false);
       abortControllerRef.current = null;
 
-      if (useSpeech && aiResponse) {
-        speak(aiResponse);
+      // 在这里添加语音播报逻辑
+      const finalResponse = conversations.find(c => c.id === activeConversationId)?.messages.slice(-1)[0]?.content;
+      if (useSpeech && finalResponse && selectedVoice && !isLoading) {
+        speak(finalResponse);
       }
     }
   };
 
   const speak = (text: string) => {
-    if (!useSpeech) return;
-    if (audio) {
-      audio.pause();
-    }
-    const newAudio = new Audio(
-      `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&voice=曼波&text=${encodeURIComponent(text)}`
-    );
-    newAudio.play();
-    setAudio(newAudio);
+    if (!useSpeech || !selectedVoice) return;
+    window.speechSynthesis.cancel(); // 先停止之前的播报
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = selectedVoice;
+    utterance.pitch = 1;
+    utterance.rate = 1.1;
+    window.speechSynthesis.speak(utterance);
   };
 
-  const compressImage = async (
-    file: File,
-    maxWidth: number,
-    maxSize: number = 1024
-  ): Promise<string> => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const fileArray = Array.from(e.target.files);
+      const compressedFiles = await Promise.all(
+        fileArray.map(async (file) => {
+          const compressedDataUrl = await compressImage(file);
+          return { id: uuidv4(), preview: compressedDataUrl, file };
+        })
+      );
+      setAttachments(prev => [...prev, ...compressedFiles]);
+    }
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (!activeConversationId) return;
+
+    const updatedConversations = conversations.map(convo => {
+      if (convo.id === activeConversationId) {
+        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          // Remove the message and all subsequent messages
+          const updatedMessages = convo.messages.slice(0, messageIndex);
+          return { ...convo, messages: updatedMessages };
+        }
+      }
+      return convo;
+    });
+
+    setConversations(updatedConversations);
+  };
+
+  const handleSaveEdit = (messageId: string, newContent: string) => {
+    if (!activeConversationId || isLoading) return;
+
+    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
+    if (!convoToUpdate) return;
+
+    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Create a new message list, truncated and with the updated content
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex + 1);
+    newMessages[messageIndex] = { ...newMessages[messageIndex], content: newContent };
+
+    // Update the state to show the edit and truncation immediately
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId ? { ...c, messages: newMessages } : c
+    ));
+
+    // Then, trigger regeneration, passing the correct message list to avoid stale state issues
+    handleRegenerate(messageId, true, newMessages);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleStartRecording = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          await handleSendAudio(audioBlob);
+          // Stop all tracks on the stream
+          stream.getTracks().forEach(track => track.stop());
+        };
+        audioChunksRef.current = [];
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        alert("无法访问麦克风，请检查权限。");
+      }
+    } else {
+      alert("您的浏览器不支持录音功能。");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+
+    try {
+      const response = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '语音识别失败');
+      }
+
+      const data = await response.json();
+      setInput(prevInput => prevInput + data.text);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (input.trim() && !isLoading) {
+        event.currentTarget.form?.requestSubmit();
+      }
+    }
+  };
+
+  const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
@@ -468,18 +647,18 @@ export default function Home() {
       abortControllerRef.current = null;
       setIsLoading(false);
     }
-    if (audio) {
-      audio.pause();
-      setAudio(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (audio) {
-      audio.pause();
-      setAudio(null);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
     }
 
     if (!input.trim() || !activeConversationId || isLoading) return;
@@ -599,62 +778,61 @@ export default function Home() {
             }
           }
         }
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          console.error(error);
+          setConversations(prevConvos =>
+            prevConvos.map(convo => {
+              if (convo.id !== activeConversationId) return convo;
+              const updatedMessages = [...convo.messages];
+              const lastMessage = updatedMessages[updatedMessages.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant') {
+                lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
+                delete lastMessage.thinking;
+              }
+              return { ...convo, messages: updatedMessages };
+            })
+          );
+        }
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
       }
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error(error);
-        setConversations(prevConvos =>
-          prevConvos.map(convo => {
-            if (convo.id !== activeConversationId) return convo;
-            const updatedMessages = [...convo.messages];
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            if (lastMessage && lastMessage.role === 'assistant') {
-              lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
-              delete lastMessage.thinking;
-            }
-            return { ...convo, messages: updatedMessages };
-          })
-        );
-      }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  };
+    };
 
-  return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
-      <div className="relative flex flex-1 flex-col">
-        <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
-          <h1 className="text-xl font-bold">FLXChat</h1>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <select
-                value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
-              >
-                {MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+    return (
+      <div className="flex h-screen bg-gray-900 text-white">
+        <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
+        <div className="relative flex flex-1 flex-col">
+          <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
+            <h1 className="text-xl font-bold">FLXChat</h1>
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <select
+                  value={modelId}
+                  onChange={(e) => setModelId(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
+                >
+                  {MODELS.map((model) => (
+                    <option key={model.id} value={model.id}>{model.name}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
               </div>
+              <button 
+                onClick={handleNewChat}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
+              >
+                新对话
+              </button>
             </div>
-            <button 
-              onClick={handleNewChat}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
-            >
-              新对话
-            </button>
-          </div>
-        </header>
+          </header>
 
-        <main className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col space-y-4">
-            <AnimatePresence>
+          <main className="flex-1 overflow-y-auto p-4">
+            <div className="flex flex-col space-y-4">
+              <AnimatePresence>
                 {messages.map((message) => (
                   <motion.div
                     key={message.id}

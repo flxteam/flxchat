@@ -6,10 +6,11 @@ interface HistoryProps {
   activeConversationId: string | null;
   setActiveConversationId: (id: string) => void;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  isCollapsed: boolean;
+  setIsCollapsed: (isCollapsed: boolean) => void;
 }
 
-const History = ({ conversations, activeConversationId, setActiveConversationId, setConversations }: HistoryProps) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const History = ({ conversations, activeConversationId, setActiveConversationId, setConversations, isCollapsed, setIsCollapsed }: HistoryProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 

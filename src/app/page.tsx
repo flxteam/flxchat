@@ -70,6 +70,7 @@ export default function Home() {
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+  const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
@@ -186,6 +187,9 @@ export default function Home() {
 
       const storedTtsEnabled = localStorage.getItem('isTtsEnabled');
       if (storedTtsEnabled) setIsTtsEnabled(JSON.parse(storedTtsEnabled));
+
+      const storedHistoryCollapsed = localStorage.getItem('isHistoryCollapsed');
+      if (storedHistoryCollapsed) setIsHistoryCollapsed(JSON.parse(storedHistoryCollapsed));
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
@@ -205,6 +209,7 @@ export default function Home() {
       localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
       localStorage.setItem('useSearch', JSON.stringify(useSearch));
       localStorage.setItem('isTtsEnabled', JSON.stringify(isTtsEnabled));
+      localStorage.setItem('isHistoryCollapsed', JSON.stringify(isHistoryCollapsed));
     } catch (error) {
       console.error("Failed to save to localStorage", error);
     }
@@ -801,7 +806,14 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-gray-900 text-white">
-      <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
+      <History 
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        setActiveConversationId={setActiveConversationId}
+        setConversations={setConversations}
+        isCollapsed={isHistoryCollapsed}
+        setIsCollapsed={setIsHistoryCollapsed}
+      />
       <div className="relative flex flex-1 flex-col">
         <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
           <h1 className="text-xl font-bold">FLXChat</h1>

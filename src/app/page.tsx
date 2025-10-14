@@ -396,7 +396,7 @@ export default function Home() {
                 sentenceBuffer += content;
 
                 // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!])\s*/;
+                const sentenceEndRegex = /([。？！.?!,，])\s*/;
                 if (sentenceEndRegex.test(sentenceBuffer)) {
                   const sentences = sentenceBuffer.split(sentenceEndRegex);
                   for (let i = 0; i < sentences.length - 1; i += 2) {
@@ -756,7 +756,7 @@ export default function Home() {
                 sentenceBuffer += content;
 
                 // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!])\s*/;
+                const sentenceEndRegex = /([。？！.?!,，])\s*/;
                 if (sentenceEndRegex.test(sentenceBuffer)) {
                   const sentences = sentenceBuffer.split(sentenceEndRegex);
                   for (let i = 0; i < sentences.length - 1; i += 2) {

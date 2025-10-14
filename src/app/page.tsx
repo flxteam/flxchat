@@ -706,6 +706,7 @@ export default function Home() {
       const decoder = new TextDecoder();
       let aiResponse = '';
       let buffer = '';
+      let sentenceBuffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -748,8 +749,25 @@ export default function Home() {
             }
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              aiResponse += content;
+              // Add a check to prevent parsing errors on empty/malformed data
+              if (parsed.choices && parsed.choices.length > 0) {
+                const content = parsed.choices[0]?.delta?.content || '';
+                aiResponse += content;
+                sentenceBuffer += content;
+
+                // Check for sentence-ending punctuation
+                const sentenceEndRegex = /([。？！.?!])\s*/;
+                if (sentenceEndRegex.test(sentenceBuffer)) {
+                  const sentences = sentenceBuffer.split(sentenceEndRegex);
+                  for (let i = 0; i < sentences.length - 1; i += 2) {
+                    const sentence = sentences[i] + sentences[i+1];
+                    if (sentence.trim()) {
+                      speak(sentence.trim());
+                    }
+                  }
+                  sentenceBuffer = sentences[sentences.length - 1];
+                }
+              }
 
               setConversations(prevConvos =>
                 prevConvos.map(convo => {
@@ -770,6 +788,11 @@ export default function Home() {
             }
           }
         }
+      }
+
+      // Speak any remaining text in the buffer
+      if (sentenceBuffer.trim()) {
+        speak(sentenceBuffer.trim());
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {

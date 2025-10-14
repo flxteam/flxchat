@@ -61,7 +61,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
       </div>
       {!isCollapsed && (
         <div className="flex-1 overflow-y-auto">
-          {conversations.map(conversation => (
+          {[...conversations].reverse().map(conversation => (
             <div 
               key={conversation.id} 
               className={`p-2 my-1 rounded-md cursor-pointer flex justify-between items-center ${activeConversationId === conversation.id ? 'bg-blue-600' : 'hover:bg-gray-700'}`}

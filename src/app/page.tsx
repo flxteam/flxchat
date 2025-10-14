@@ -805,7 +805,7 @@ export default function Home() {
   };
 
   return (
-    <div className="relative flex h-screen bg-gray-900 text-white font-sans">
+    <div className="flex h-screen bg-gray-900 text-white">
       <History 
         conversations={conversations}
         activeConversationId={activeConversationId}

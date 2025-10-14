@@ -86,11 +86,7 @@ export default function Home() {
     console.log("正在合成语音，文本内容:", text);
     try {
       const response = await fetch(
-        `git add .
-git commit -m "fix: 修复添加一些功能"
-git push
-
-https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
+        `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
       );
       const result = await response.json();
       if (result.code === 200 && result.data.audio_url) {

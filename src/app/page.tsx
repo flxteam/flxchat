@@ -83,9 +83,12 @@ export default function Home() {
       return;
     }
 
+    console.log("正在合成语音，文本内容:", text);
     try {
-      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`);
-      const data = await response.json();
+      const response = await fetch(
+        `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
+      );
+      const result = await response.json();
       if (data.code === 200 && data.data.audio_url) {
         audioQueueRef.current.push(data.data.audio_url);
         if (!isSpeakingRef.current) {

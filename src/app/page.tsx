@@ -386,25 +386,17 @@ export default function Home() {
               aiResponse += content;
               sentenceBuffer += content;
 
-              const sentenceEndRegex = /[。？！.?!]/;
-              if (isTtsEnabled && sentenceEndRegex.test(sentenceBuffer)) {
+              // Check for sentence-ending punctuation
+              const sentenceEndRegex = /([。？！.?!])\s*/;
+              if (sentenceEndRegex.test(sentenceBuffer)) {
                 const sentences = sentenceBuffer.split(sentenceEndRegex);
-                const completeSentences = sentences.slice(0, -1);
-                sentenceBuffer = sentences[sentences.length - 1] || '';
-
-                for (const sentence of completeSentences) {
+                for (let i = 0; i < sentences.length - 1; i += 2) {
+                  const sentence = sentences[i] + sentences[i+1];
                   if (sentence.trim()) {
-                    const ttsResponse = await fetch(`/api/tts?text=${encodeURIComponent(sentence.trim())}`);
-                    if (ttsResponse.ok) {
-                      const audioBlob = await ttsResponse.blob();
-                      const audioUrl = URL.createObjectURL(audioBlob);
-                      audioQueueRef.current.push(audioUrl);
-                      if (!isSpeakingRef.current) {
-                        playNextAudio();
-                      }
-                    }
+                    speak(sentence.trim());
                   }
                 }
+                sentenceBuffer = sentences[sentences.length - 1];
               }
 
               setConversations(prevConvos =>
@@ -427,9 +419,10 @@ export default function Home() {
           }
         }
       }
-      
-      if (isTtsEnabled) {
-        speak(aiResponse);
+
+      // Speak any remaining text in the buffer
+      if (sentenceBuffer.trim()) {
+        speak(sentenceBuffer.trim());
       }
 
     } catch (error) {

@@ -89,13 +89,13 @@ export default function Home() {
         `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
       );
       const result = await response.json();
-      if (result.code === 200 && result.data.audio_url) {
+      if (result.code === 200 && result.data && result.data.audio_url) {
         audioQueueRef.current.push(result.data.audio_url);
         if (!isSpeakingRef.current) {
           playNextAudio();
         }
       } else {
-        console.error("语音合成失败:", result.message);
+        console.error("语音合成失败，API返回:", result);
       }
     } catch (error) {
       console.error("调用语音合成API失败:", error);

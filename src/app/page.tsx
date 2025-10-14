@@ -361,30 +361,6 @@ export default function Home() {
     }
   };
 
-  // 用户消息编辑
-  const handleSaveEdit = (messageId: string, newContent: string) => {
-    setConversations(prevConvos =>
-      prevConvos.map(convo => {
-        if (convo.id !== activeConversationId) return convo;
-        const updatedMessages = convo.messages.map(msg =>
-          msg.id === messageId ? { ...msg, content: newContent } : msg
-        );
-        return { ...convo, messages: updatedMessages };
-      })
-    );
-  };
-
-  // 用户消息删除
-  const handleDeleteMessage = (messageId: string) => {
-    setConversations(prevConvos =>
-      prevConvos.map(convo => {
-        if (convo.id !== activeConversationId) return convo;
-        const updatedMessages = convo.messages.filter(msg => msg.id !== messageId);
-        return { ...convo, messages: updatedMessages };
-      })
-    );
-  };
-
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />
@@ -570,7 +546,7 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 {attachments.map((attachment, index) => (
                   <div key={index} className="relative">
-                    <Image src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" width={80} height={80} />
+                    <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" />
                     <button
                       type="button"
                       onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
@@ -726,3 +702,23 @@ export default function Home() {
     </div>
   );
 }
+
+
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+      setIsModelMenuOpen(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, []);
+
+useEffect(() => {
+  if (attachments.length > 0 && useSearch) {
+    setUseSearch(false);
+  }
+}, [attachments, useSearch]);

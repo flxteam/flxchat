@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, useEffect, FormEvent, useMemo } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, Conversation } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -104,8 +105,10 @@ export default function Home() {
     }
   }, [attachments, useSearch]);
 
-  const activeConversation = conversations.find(c => c.id === activeConversationId);
-  const messages = activeConversation ? activeConversation.messages : [];
+  const messages = useMemo(() => {
+    const activeConversation = conversations.find(c => c.id === activeConversationId);
+    return activeConversation ? activeConversation.messages : [];
+  }, [conversations, activeConversationId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -178,6 +181,19 @@ export default function Home() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const generateConversationTitle = async (conversation: Conversation) => {
     if (conversation.messages.length < 2) return;
@@ -860,7 +876,7 @@ export default function Home() {
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-2">
                             {message.attachments.map((attachment, index) => (
-                              <img key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg" />
+                              <Image key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg object-cover" width={300} height={192} />
                             ))}
                           </div>
                         )}

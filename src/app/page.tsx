@@ -95,7 +95,7 @@ export default function Home() {
           playNextAudio();
         }
       } else {
-        console.error("语音合成失败:", data.message);
+        console.error("语音合成失败:", result.message);
       }
     } catch (error) {
       console.error("调用语音合成API失败:", error);

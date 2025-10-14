@@ -70,8 +70,10 @@ export default function Home() {
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
@@ -631,7 +633,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步深度思考，然后细致回答问题。问题： ${input}`;
+      finalInput = `请一步一步深度思考，然后细致回答问题 格式：因为...那么...所以... 。问题： ${input}`;
     }
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
@@ -771,19 +773,41 @@ export default function Home() {
         <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
           <h1 className="text-xl font-bold">FLXChat</h1>
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <select
-                value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
+            <div className="relative" ref={modelMenuRef}>
+              <button
+                onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between w-full p-2.5"
               >
-                {MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-              </div>
+                <span>{MODELS.find(m => m.id === modelId)?.name || 'Select Model'}</span>
+                <svg className={`w-4 h-4 transition-transform duration-200 ${isModelMenuOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+              <AnimatePresence>
+                {isModelMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="absolute z-10 top-full mt-2 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-lg"
+                  >
+                    <ul className="py-1">
+                      {MODELS.map((model) => (
+                        <li key={model.id}>
+                          <button
+                            onClick={() => {
+                              setModelId(model.id);
+                              setIsModelMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-600"
+                          >
+                            {model.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <button 
               onClick={handleNewChat}
@@ -1083,3 +1107,23 @@ export default function Home() {
     </div>
   );
 }
+
+
+useEffect(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+      setIsModelMenuOpen(false);
+    }
+  };
+
+  document.addEventListener("mousedown", handleClickOutside);
+  return () => {
+    document.removeEventListener("mousedown", handleClickOutside);
+  };
+}, []);
+
+useEffect(() => {
+  if (attachments.length > 0 && useSearch) {
+    setUseSearch(false);
+  }
+}, [attachments, useSearch]);

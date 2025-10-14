@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent, useMemo } from 'react';
-import Image from 'next/image';
+import { useState, useRef, useEffect, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, Conversation } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
@@ -71,10 +70,8 @@ export default function Home() {
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(false);
   const [isTtsEnabled, setIsTtsEnabled] = useState(false);
-  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const modelMenuRef = useRef<HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isSpeakingRef = useRef(false);
@@ -105,23 +102,8 @@ export default function Home() {
     }
   }, [attachments, useSearch]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
-        setIsModelMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const messages = useMemo(() => {
-    const activeConversation = conversations.find(c => c.id === activeConversationId);
-    return activeConversation ? activeConversation.messages : [];
-  }, [conversations, activeConversationId]);
+  const activeConversation = conversations.find(c => c.id === activeConversationId);
+  const messages = activeConversation ? activeConversation.messages : [];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -195,6 +177,427 @@ export default function Home() {
     scrollToBottom();
   }, [messages]);
 
+  const generateConversationTitle = async (conversation: Conversation) => {
+    if (conversation.messages.length < 2) return;
+
+    const firstUserMessage = conversation.messages.find(m => m.role === 'user');
+    if (!firstUserMessage) return;
+
+    try {
+      const response = await fetch('/api/generate-title', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: conversation.messages }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const newTitle = data.title || firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+
+      const updatedConversations = conversations.map(c =>
+        c.id === conversation.id ? { ...c, title: newTitle } : c
+      );
+      setConversations(updatedConversations);
+    } catch (error) {
+      console.error('Failed to generate conversation title:', error);
+      // Fallback to simple title if API call fails
+      const newTitle = firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
+      const updatedConversations = conversations.map(c =>
+        c.id === conversation.id ? { ...c, title: newTitle } : c
+      );
+      setConversations(updatedConversations);
+    }
+  };
+
+
+  useEffect(() => {
+    // This effect is for generating a title after the first exchange.
+    if (isLoading) return; // Don't run while AI is responding.
+
+    const conversationToUpdate = conversations.find(convo => 
+      convo.id === activeConversationId &&
+      convo.messages.length === 2 &&
+      convo.title.startsWith('新对话')
+    );
+
+    if (conversationToUpdate) {
+      generateConversationTitle(conversationToUpdate);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, activeConversationId, isLoading]);
+
+
+
+  const handleOpenPromptModal = () => {
+    setModalSystemPrompt(systemPrompt);
+    setIsPromptModalOpen(true);
+  };
+
+  const handleClosePromptModal = () => {
+    setIsPromptModalOpen(false);
+  };
+
+  const handleSavePrompt = () => {
+    setSystemPrompt(modalSystemPrompt);
+    setIsPromptModalOpen(false);
+  };
+
+  const handleResetPrompt = () => {
+    setModalSystemPrompt(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+  };
+
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      // You might want to add a toast notification here to confirm the copy.
+      alert('已复制到剪贴板!');
+    } catch (err) {
+      console.error('Failed to copy message: ', err);
+    }
+  };
+
+  const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
+    if (!activeConversationId || isLoading) return;
+
+    let messagesForApi: Message[];
+
+    if (isFromEdit && messagesToRegenerate) {
+      // If it's an edit, use the messages passed from handleSaveEdit
+      messagesForApi = messagesToRegenerate;
+    } else {
+      // For a normal regenerate, find the conversation and slice as before
+      const currentConversation = conversations.find(c => c.id === activeConversationId);
+      if (!currentConversation) return;
+
+      let messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+      // The assistant message is the one to replace, so we go back one.
+      messageIndex = messageIndex - 1;
+      if (messageIndex < 0) return;
+      messagesForApi = currentConversation.messages.slice(0, messageIndex + 1);
+    }
+
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
+
+    setConversations(prevConvos =>
+      prevConvos.map(c =>
+        c.id === activeConversationId
+          ? { ...c, messages: [...messagesForApi, assistantPlaceholder] }
+          : c
+      )
+    );
+    setIsLoading(true);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          messages: messagesForApi,
+          systemPrompt,
+          modelId,
+          useSearch,
+          useThinkingMode,
+          attachments: attachments.map(a => a.preview)
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to get response from server for regeneration.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = '';
+      let buffer = '';
+      let sentenceBuffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+
+          if (line.startsWith('event: searching')) {
+            setConversations(prevConvos =>
+              prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage && lastMessage.role === 'assistant') {
+                  lastMessage.thinking = '搜索中...';
+                }
+                return { ...convo, messages: updatedMessages };
+              })
+            );
+          } else if (line.startsWith('data: ')) {
+            const data = line.substring(6);
+            if (data.trim() === '[DONE]') {
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage) {
+                    delete lastMessage.thinking;
+                  }
+                  return { ...convo, messages: updatedMessages };
+                })
+              );
+              break;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices[0]?.delta?.content || '';
+              aiResponse += content;
+              sentenceBuffer += content;
+
+              const sentenceEndRegex = /[。？！.?!]/;
+              if (isTtsEnabled && sentenceEndRegex.test(sentenceBuffer)) {
+                const sentences = sentenceBuffer.split(sentenceEndRegex);
+                const completeSentences = sentences.slice(0, -1);
+                sentenceBuffer = sentences[sentences.length - 1] || '';
+
+                for (const sentence of completeSentences) {
+                  if (sentence.trim()) {
+                    const ttsResponse = await fetch(`/api/tts?text=${encodeURIComponent(sentence.trim())}`);
+                    if (ttsResponse.ok) {
+                      const audioBlob = await ttsResponse.blob();
+                      const audioUrl = URL.createObjectURL(audioBlob);
+                      audioQueueRef.current.push(audioUrl);
+                      if (!isSpeakingRef.current) {
+                        playNextAudio();
+                      }
+                    }
+                  }
+                }
+              }
+
+              setConversations(prevConvos =>
+                prevConvos.map(convo => {
+                  if (convo.id !== activeConversationId) return convo;
+                  const updatedMessages = [...convo.messages];
+                  const lastMessage = updatedMessages[updatedMessages.length - 1];
+                  if (lastMessage && lastMessage.role === 'assistant') {
+                    lastMessage.content = aiResponse;
+                    if (aiResponse && lastMessage.thinking) {
+                      delete lastMessage.thinking;
+                    }
+                  }
+                  return { ...convo, messages: updatedMessages };
+                })
+              );
+            } catch (e) {
+              console.error('Error parsing stream data for regeneration:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if ((error as Error).name !== 'AbortError') {
+        console.error(error);
+        setConversations(prevConvos =>
+          prevConvos.map(convo => {
+            if (convo.id !== activeConversationId) return convo;
+            const updatedMessages = [...convo.messages];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.role === 'assistant') {
+              lastMessage.content = `抱歉，重新生成出错了: ${(error as Error).message}`;
+              delete lastMessage.thinking;
+            }
+            return { ...convo, messages: updatedMessages };
+          })
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleDeleteMessage = (messageId: string) => {
+    if (!activeConversationId) return;
+
+    const updatedConversations = conversations.map(convo => {
+      if (convo.id === activeConversationId) {
+        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          // Remove the message and all subsequent messages
+          const updatedMessages = convo.messages.slice(0, messageIndex);
+          return { ...convo, messages: updatedMessages };
+        }
+      }
+      return convo;
+    });
+
+    setConversations(updatedConversations);
+  };
+
+  const handleSaveEdit = (messageId: string, newContent: string) => {
+    if (!activeConversationId || isLoading) return;
+
+    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
+    if (!convoToUpdate) return;
+
+    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    // Create a new message list, truncated and with the updated content
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex + 1);
+    newMessages[messageIndex] = { ...newMessages[messageIndex], content: newContent };
+
+    // Update the state to show the edit and truncation immediately
+    setConversations(prev => prev.map(c =>
+      c.id === activeConversationId ? { ...c, messages: newMessages } : c
+    ));
+
+    // Then, trigger regeneration, passing the correct message list to avoid stale state issues
+    handleRegenerate(messageId, true, newMessages);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleStartRecording = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          await handleSendAudio(audioBlob);
+          // Stop all tracks on the stream
+          stream.getTracks().forEach(track => track.stop());
+        };
+        audioChunksRef.current = [];
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        alert("无法访问麦克风，请检查权限。");
+      }
+    } else {
+      alert("您的浏览器不支持录音功能。");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+
+    try {
+      const response = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '语音识别失败');
+      }
+
+      const data = await response.json();
+      setInput(prevInput => prevInput + data.text);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (input.trim() && !isLoading) {
+        event.currentTarget.form?.requestSubmit();
+      }
+    }
+  };
+
+  const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src); // Revoke Object URL after loading
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        let { width, height } = img;
+        const MAX_WIDTH = 2048;
+        const MAX_HEIGHT = 2048;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = (err) => {
+        URL.revokeObjectURL(img.src); // Revoke Object URL on error
+        reject(err);
+      };
+    });
+  };
+
+  useEffect(() => {
+    // Scroll to the bottom of the messages container
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
+
   const handleNewChat = () => {
     const newConversation: Conversation = {
       id: uuidv4(),
@@ -228,7 +631,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步深度思考，然后细致回答问题 格式：因为...那么...所以... 。问题： ${input}`;
+      finalInput = `请一步一步深度思考，然后细致回答问题。问题： ${input}`;
     }
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
@@ -368,41 +771,19 @@ export default function Home() {
         <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
           <h1 className="text-xl font-bold">FLXChat</h1>
           <div className="flex items-center gap-4">
-            <div className="relative" ref={modelMenuRef}>
-              <button
-                onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
-                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 flex items-center justify-between w-full p-2.5"
+            <div className="relative">
+              <select
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
               >
-                <span>{MODELS.find(m => m.id === modelId)?.name || 'Select Model'}</span>
-                <svg className={`w-4 h-4 transition-transform duration-200 ${isModelMenuOpen ? 'transform rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-              </button>
-              <AnimatePresence>
-                {isModelMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="absolute z-10 top-full mt-2 w-full bg-gray-700 border border-gray-600 rounded-lg shadow-lg"
-                  >
-                    <ul className="py-1">
-                      {MODELS.map((model) => (
-                        <li key={model.id}>
-                          <button
-                            onClick={() => {
-                              setModelId(model.id);
-                              setIsModelMenuOpen(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-600"
-                          >
-                            {model.name}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                {MODELS.map((model) => (
+                  <option key={model.id} value={model.id}>{model.name}</option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
             </div>
             <button 
               onClick={handleNewChat}
@@ -455,7 +836,7 @@ export default function Home() {
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-2">
                             {message.attachments.map((attachment, index) => (
-                              <Image key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg object-cover" width={300} height={192} />
+                              <img key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg" />
                             ))}
                           </div>
                         )}
@@ -702,23 +1083,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-useEffect(() => {
-  const handleClickOutside = (event: MouseEvent) => {
-    if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
-      setIsModelMenuOpen(false);
-    }
-  };
-
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, []);
-
-useEffect(() => {
-  if (attachments.length > 0 && useSearch) {
-    setUseSearch(false);
-  }
-}, [attachments, useSearch]);

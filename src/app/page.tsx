@@ -95,7 +95,7 @@ export default function Home() {
           playNextAudio();
         }
       } else {
-        console.error("语音合成失败，API返回:", result);
+        console.error("语音API返回成功但未提供音频地址，API返回:", result);
       }
     } catch (error) {
       console.error("调用语音合成API失败:", error);
@@ -122,6 +122,15 @@ export default function Home() {
     } else {
       isSpeakingRef.current = false;
     }
+  };
+
+  const stopSpeaking = () => {
+    if (currentAudio) {
+      currentAudio.pause();
+      setCurrentAudio(null);
+    }
+    audioQueueRef.current = [];
+    isSpeakingRef.current = false;
   };
 
   useEffect(() => {
@@ -290,6 +299,7 @@ export default function Home() {
   };
 
   const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
+    stopSpeaking();
     if (!activeConversationId || isLoading) return;
 
     let messagesForApi: Message[];
@@ -639,6 +649,7 @@ export default function Home() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    stopSpeaking();
     if (!input.trim() || !activeConversationId || isLoading) return;
 
     const currentConversation = conversations.find(c => c.id === activeConversationId);

@@ -104,9 +104,13 @@ export default function Home() {
       isSpeakingRef.current = true;
       const audioUrl = audioQueueRef.current.shift();
       if (audioUrl) {
-        const audio = new Audio(audioUrl);
+        const audio = new Audio(`/api/tts-proxy?url=${encodeURIComponent(audioUrl)}`);
         setCurrentAudio(audio);
-        audio.play();
+        audio.play().catch(e => {
+          console.error("音频播放失败:", e);
+          // Try to play the next one if this one fails
+          playNextAudio();
+        });
         audio.onended = () => {
           setCurrentAudio(null);
           playNextAudio();
@@ -382,21 +386,24 @@ export default function Home() {
             }
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content || '';
-              aiResponse += content;
-              sentenceBuffer += content;
+              // Add a check to prevent parsing errors on empty/malformed data
+              if (parsed.choices && parsed.choices.length > 0) {
+                const content = parsed.choices[0]?.delta?.content || '';
+                aiResponse += content;
+                sentenceBuffer += content;
 
-              // Check for sentence-ending punctuation
-              const sentenceEndRegex = /([。？！.?!])\s*/;
-              if (sentenceEndRegex.test(sentenceBuffer)) {
-                const sentences = sentenceBuffer.split(sentenceEndRegex);
-                for (let i = 0; i < sentences.length - 1; i += 2) {
-                  const sentence = sentences[i] + sentences[i+1];
-                  if (sentence.trim()) {
-                    speak(sentence.trim());
+                // Check for sentence-ending punctuation
+                const sentenceEndRegex = /([。？！.?!])\s*/;
+                if (sentenceEndRegex.test(sentenceBuffer)) {
+                  const sentences = sentenceBuffer.split(sentenceEndRegex);
+                  for (let i = 0; i < sentences.length - 1; i += 2) {
+                    const sentence = sentences[i] + sentences[i+1];
+                    if (sentence.trim()) {
+                      speak(sentence.trim());
+                    }
                   }
+                  sentenceBuffer = sentences[sentences.length - 1];
                 }
-                sentenceBuffer = sentences[sentences.length - 1];
               }
 
               setConversations(prevConvos =>
@@ -650,7 +657,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步深度思考，然后细致回答问题。问题： ${input}`;
+      finalInput = `请一步一步深度思考，然后细致回答问题，格式：首先_然后_所以。问题： ${input}`;
     }
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };

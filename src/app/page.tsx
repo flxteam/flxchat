@@ -546,7 +546,7 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 {attachments.map((attachment, index) => (
                   <div key={index} className="relative">
-                    <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" />
+                    <Image src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" width={80} height={80} />
                     <button
                       type="button"
                       onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
@@ -702,23 +702,3 @@ export default function Home() {
     </div>
   );
 }
-
-
-useEffect(() => {
-  const handleClickOutside = (event: MouseEvent) => {
-    if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
-      setIsModelMenuOpen(false);
-    }
-  };
-
-  document.addEventListener("mousedown", handleClickOutside);
-  return () => {
-    document.removeEventListener("mousedown", handleClickOutside);
-  };
-}, []);
-
-useEffect(() => {
-  if (attachments.length > 0 && useSearch) {
-    setUseSearch(false);
-  }
-}, [attachments, useSearch]);

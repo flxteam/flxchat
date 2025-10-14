@@ -361,6 +361,19 @@ export default function Home() {
     }
   };
 
+  // 用户消息编辑
+  const handleSaveEdit = (messageId: string, newContent: string) => {
+    setConversations(prevConvos =>
+      prevConvos.map(convo => {
+        if (convo.id !== activeConversationId) return convo;
+        const updatedMessages = convo.messages.map(msg =>
+          msg.id === messageId ? { ...msg, content: newContent } : msg
+        );
+        return { ...convo, messages: updatedMessages };
+      })
+    );
+  };
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />

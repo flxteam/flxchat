@@ -646,7 +646,7 @@ export default function Home() {
 
     let finalInput = input;
     if (useThinkingMode) {
-      finalInput = `请一步一步深度思考，然后细致回答问题，格式：首先_然后_所以。问题： ${input}`;
+      finalInput = `请一步一步深度思考，然后细致回答问题，写出你的思考过程，格式：首先_然后_所以。问题： ${input}`;
     }
 
     const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };

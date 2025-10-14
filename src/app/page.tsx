@@ -78,6 +78,27 @@ export default function Home() {
   const audioQueueRef = useRef<string[]>([]);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
 
+  const speak = async (text: string, voice: string = '体虚生') => {
+    if (!isTtsEnabled || text.trim().length === 0) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`);
+      const data = await response.json();
+      if (data.code === 200 && data.data.audio_url) {
+        audioQueueRef.current.push(data.data.audio_url);
+        if (!isSpeakingRef.current) {
+          playNextAudio();
+        }
+      } else {
+        console.error("语音合成失败:", data.message);
+      }
+    } catch (error) {
+      console.error("调用语音合成API失败:", error);
+    }
+  };
+
   const playNextAudio = () => {
     if (audioQueueRef.current.length > 0) {
       isSpeakingRef.current = true;
@@ -406,6 +427,11 @@ export default function Home() {
           }
         }
       }
+      
+      if (isTtsEnabled) {
+        speak(aiResponse);
+      }
+
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);

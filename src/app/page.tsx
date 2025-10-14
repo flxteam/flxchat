@@ -397,20 +397,6 @@ https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURICompone
               if (parsed.choices && parsed.choices.length > 0) {
                 const content = parsed.choices[0]?.delta?.content || '';
                 aiResponse += content;
-                sentenceBuffer += content;
-
-                // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!])\s*/;
-                if (sentenceEndRegex.test(sentenceBuffer)) {
-                  const sentences = sentenceBuffer.split(sentenceEndRegex);
-                  for (let i = 0; i < sentences.length - 1; i += 2) {
-                    const sentence = sentences[i] + sentences[i+1];
-                    if (sentence.trim()) {
-                      speak(sentence.trim());
-                    }
-                  }
-                  sentenceBuffer = sentences[sentences.length - 1];
-                }
               }
 
               setConversations(prevConvos =>
@@ -434,9 +420,9 @@ https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURICompone
         }
       }
 
-      // Speak any remaining text in the buffer
-      if (sentenceBuffer.trim()) {
-        speak(sentenceBuffer.trim());
+      // Speak the entire response at once
+      if (aiResponse.trim() && isTtsEnabled) {
+        speak(aiResponse.trim());
       }
 
     } catch (error) {
@@ -757,20 +743,6 @@ https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURICompone
               if (parsed.choices && parsed.choices.length > 0) {
                 const content = parsed.choices[0]?.delta?.content || '';
                 aiResponse += content;
-                sentenceBuffer += content;
-
-                // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!])\s*/;
-                if (sentenceEndRegex.test(sentenceBuffer)) {
-                  const sentences = sentenceBuffer.split(sentenceEndRegex);
-                  for (let i = 0; i < sentences.length - 1; i += 2) {
-                    const sentence = sentences[i] + sentences[i+1];
-                    if (sentence.trim()) {
-                      speak(sentence.trim());
-                    }
-                  }
-                  sentenceBuffer = sentences[sentences.length - 1];
-                }
               }
 
               setConversations(prevConvos =>
@@ -794,9 +766,9 @@ https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURICompone
         }
       }
 
-      // Speak any remaining text in the buffer
-      if (sentenceBuffer.trim()) {
-        speak(sentenceBuffer.trim());
+      // Speak the entire response at once
+      if (aiResponse.trim() && isTtsEnabled) {
+        speak(aiResponse.trim());
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {

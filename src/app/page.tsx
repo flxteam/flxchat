@@ -105,6 +105,19 @@ export default function Home() {
     }
   }, [attachments, useSearch]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   const messages = useMemo(() => {
     const activeConversation = conversations.find(c => c.id === activeConversationId);
     return activeConversation ? activeConversation.messages : [];

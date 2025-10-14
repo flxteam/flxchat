@@ -374,6 +374,17 @@ export default function Home() {
     );
   };
 
+  // 用户消息删除
+  const handleDeleteMessage = (messageId: string) => {
+    setConversations(prevConvos =>
+      prevConvos.map(convo => {
+        if (convo.id !== activeConversationId) return convo;
+        const updatedMessages = convo.messages.filter(msg => msg.id !== messageId);
+        return { ...convo, messages: updatedMessages };
+      })
+    );
+  };
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <History conversations={conversations} activeConversationId={activeConversationId} setActiveConversationId={setActiveConversationId} setConversations={setConversations} />

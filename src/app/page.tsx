@@ -86,7 +86,11 @@ export default function Home() {
     console.log("正在合成语音，文本内容:", text);
     try {
       const response = await fetch(
-        `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
+        `git add .
+git commit -m "fix: 修复添加一些功能"
+git push
+
+https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
       );
       const result = await response.json();
       if (result.code === 200 && result.data.audio_url) {
@@ -396,7 +400,7 @@ export default function Home() {
                 sentenceBuffer += content;
 
                 // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!,，])\s*/;
+                const sentenceEndRegex = /([。？！.?!])\s*/;
                 if (sentenceEndRegex.test(sentenceBuffer)) {
                   const sentences = sentenceBuffer.split(sentenceEndRegex);
                   for (let i = 0; i < sentences.length - 1; i += 2) {
@@ -756,7 +760,7 @@ export default function Home() {
                 sentenceBuffer += content;
 
                 // Check for sentence-ending punctuation
-                const sentenceEndRegex = /([。？！.?!,，])\s*/;
+                const sentenceEndRegex = /([。？！.?!])\s*/;
                 if (sentenceEndRegex.test(sentenceBuffer)) {
                   const sentences = sentenceBuffer.split(sentenceEndRegex);
                   for (let i = 0; i < sentences.length - 1; i += 2) {

@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import History from '@/components/History';
+import { FiSend, FiPlus, FiTrash2, FiMenu, FiX, FiSettings, FiLoader, FiCopy, FiVolume2, FiSquare } from 'react-icons/fi';
 
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   const [isCopied, setIsCopied] = useState(false);
@@ -19,40 +20,45 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
     try {
       await navigator.clipboard.writeText(codeText);
       setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+      setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
   };
 
   return !inline && match ? (
-    <div className="relative group bg-gray-900 rounded-lg my-2">
+    <div className="relative group bg-gray-800 rounded-lg my-4 text-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-700 rounded-t-lg">
+        <span className="text-gray-400 text-xs">{match[1]}</span>
+        <button 
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 bg-gray-600 hover:bg-gray-500 text-white text-xs py-1 px-2 rounded"
+        >
+          <FiCopy />
+          {isCopied ? '已复制!' : '复制'}
+        </button>
+      </div>
       <SyntaxHighlighter
         style={vscDarkPlus}
         language={match[1]}
         PreTag="div"
         {...props}
+        customStyle={{ margin: 0, borderRadius: '0 0 0.5rem 0.5rem', padding: '1rem' }}
       >
         {codeText}
       </SyntaxHighlighter>
-      <button 
-        onClick={handleCopy}
-        className="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-      >
-        {isCopied ? '已复制!' : '复制'}
-      </button>
     </div>
   ) : (
-    <code className={className} {...props}>
+    <code className={`text-sm bg-gray-700 text-yellow-300 rounded px-1 py-0.5 ${className}`} {...props}>
       {children}
     </code>
   );
 };
 
 const MODELS = [
- { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B' },
-  { id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B' },
+{ id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B' },
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
+  { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
   { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-Qwen3-8B' },
   { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek-R1-Distill-Qwen-7B' },
   { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },

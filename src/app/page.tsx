@@ -50,9 +50,9 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 };
 
 const MODELS = [
+ { id: 'tencent/Hunyuan-MT-7B', name: 'Hunyuan-MT-7B' },
   { id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B' },
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
-  { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
   { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-Qwen3-8B' },
   { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek-R1-Distill-Qwen-7B' },
   { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },
@@ -805,7 +805,7 @@ export default function Home() {
   };
 
   return (
-    <div className="relative flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen bg-gray-900 text-white">
       <History 
         conversations={conversations}
         activeConversationId={activeConversationId}

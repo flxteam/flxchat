@@ -51,11 +51,11 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 
 const MODELS = [
   { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
+  { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },
   { id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B' },
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
   { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-Qwen3-8B' },
   { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek-R1-Distill-Qwen-7B' },
-  { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },
   { id: 'TeleAI/TeleSpeechASR', name: 'TeleAI' },
 ];
 
@@ -1008,13 +1008,7 @@ export default function Home() {
                   if (e.target.files) {
                     const fileList = Array.from(e.target.files);
                     const compressedFiles = await Promise.all(
-                      fileList.map(async (file) => {
-                        const compressedPreview = await compressImage(file);
-                        return {
-                          file,
-                          preview: compressedPreview,
-                        };
-                      })
+                      fileList.map(async (file) => ({ file, preview: await compressImage(file) }))
                     );
                     setAttachments(prev => [...prev, ...compressedFiles]);
                   }

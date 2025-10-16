@@ -63,7 +63,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
 
   const itemVariants: Variants = {
     open: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
-    closed: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+    closed: { opacity: 0, x: -20 },
   };
 
   return (

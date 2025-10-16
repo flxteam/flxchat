@@ -102,7 +102,3 @@ npm run dev
 
 - **GitHub**: [@flxteam](https://github.com/flxteam)
 - **官网**: [feli.qzz.io](https://feli.qzz.io)
-
-## 📄 许可证
-
-本项目采用 [MIT License](https://github.com/flxteam/flx-chat/blob/main/LICENSE) 授权。

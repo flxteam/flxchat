@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Conversation } from '@/types';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { FiEdit, FiTrash2, FiChevronsLeft, FiChevronsRight, FiPlus } from 'react-icons/fi';
 
 interface HistoryProps {
@@ -56,7 +56,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
     setEditingTitle('');
   };
 
-  const sidebarVariants = {
+  const sidebarVariants: Variants = {
     open: { width: '288px', transition: { type: 'spring', stiffness: 300, damping: 30 } },
     closed: { width: '80px', transition: { type: 'spring', stiffness: 300, damping: 30 } },
   };

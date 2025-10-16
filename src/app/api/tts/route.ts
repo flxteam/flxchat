@@ -8,23 +8,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
     }
 
-    // 步骤 1: 调用外部 TTS 服务获取包含 audio_url 的 JSON
-    const externalTtsUrl = `https://api.cenguigui.cn/api/speech/AiChat/?text=${encodeURIComponent(text)}`;
-    const externalTtsResponse = await fetch(externalTtsUrl, {
-      method: 'GET',
-    });
+    const externalTtsUrl = `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=体虚生`;
+    const externalTtsResponse = await fetch(externalTtsUrl);
 
     if (!externalTtsResponse.ok) {
       const errorText = await externalTtsResponse.text();
       console.error('External TTS service error:', errorText);
       return NextResponse.json({ error: 'Failed to get audio URL from external service', details: errorText }, { status: externalTtsResponse.status });
-    }
-
-    const contentType = externalTtsResponse.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const errorText = await externalTtsResponse.text();
-      console.error('External TTS service did not return JSON. Response:', errorText);
-      return NextResponse.json({ error: 'External TTS service returned non-JSON response', details: errorText }, { status: 502 });
     }
 
     const responseData = await externalTtsResponse.json();
@@ -35,19 +25,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Audio URL not found in response' }, { status: 500 });
     }
 
-    // 步骤 2: 服务器端直接访问 audio_url 获取音频文件
-    const audioResponse = await fetch(audioUrl);
+    const proxyUrl = `${req.nextUrl.origin}/api/tts-proxy?url=${encodeURIComponent(audioUrl)}`;
+    const proxyResponse = await fetch(proxyUrl);
 
-    if (!audioResponse.ok) {
-        const errorText = await audioResponse.text();
-        console.error('Failed to fetch audio file:', errorText);
-        return NextResponse.json({ error: 'Failed to fetch audio file', details: errorText }, { status: audioResponse.status });
+    if (!proxyResponse.ok) {
+      const errorText = await proxyResponse.text();
+      console.error('TTS proxy error:', errorText);
+      return NextResponse.json({ error: 'Failed to fetch audio from proxy', details: errorText }, { status: proxyResponse.status });
     }
 
-    // 步骤 3: 将获取到的音频流直接返回给前端
-    const audioBlob = await audioResponse.blob();
+    const audioBlob = await proxyResponse.blob();
     const headers = new Headers();
-    headers.set('Content-Type', audioResponse.headers.get('Content-Type') || 'audio/wav');
+    headers.set('Content-Type', proxyResponse.headers.get('Content-Type') || 'audio/wav');
 
     return new NextResponse(audioBlob, { status: 200, headers });
 

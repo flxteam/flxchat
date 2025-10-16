@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
+import { useState, useRef, useEffect, FormEvent, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Message, Conversation } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import History from '@/components/History';
 
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
@@ -19,34 +19,160 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
     try {
       await navigator.clipboard.writeText(codeText);
       setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+      setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
     }
   };
 
   return !inline && match ? (
-    <div className="relative group bg-gray-900 rounded-lg my-2">
+    <div className="relative group bg-surface rounded-lg my-2 text-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 rounded-t-lg">
+        <span className="text-secondary text-xs font-sans">{match[1]}</span>
+        <button 
+          onClick={handleCopy}
+          className="bg-gray-700 hover:bg-gray-600 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+        >
+          {isCopied ? '已复制!' : '复制'}
+        </button>
+      </div>
       <SyntaxHighlighter
-        style={vscDarkPlus}
+        style={a11yDark}
         language={match[1]}
         PreTag="div"
         {...props}
       >
         {codeText}
       </SyntaxHighlighter>
-      <button 
-        onClick={handleCopy}
-        className="absolute top-2 right-2 bg-gray-600 hover:bg-gray-500 text-white text-xs font-sans py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-      >
-        {isCopied ? '已复制!' : '复制'}
-      </button>
     </div>
   ) : (
-    <code className={className} {...props}>
+    <code className={`text-accent ${className}`} {...props}>
       {children}
     </code>
   );
+};
+
+const ThinkingIndicator = ({ text }: { text: string }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="flex items-center gap-2 text-sm text-secondary animate-pulse"
+  >
+    <div className="w-5 h-5 flex items-center justify-center">
+      <svg className="animate-spin h-4 w-4 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+    <span>{text}</span>
+  </motion.div>
+);
+
+const useAudio = (isTtsEnabled: boolean) => {
+  const isSpeakingRef = useRef(false);
+  const audioQueueRef = useRef<string[]>([]);
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
+
+  const processQueue = useCallback(async () => {
+    if (isSpeakingRef.current || audioQueueRef.current.length === 0 || !isTtsEnabled) {
+      return;
+    }
+    isSpeakingRef.current = true;
+    const text = audioQueueRef.current.shift();
+    if (!text) {
+      isSpeakingRef.current = false;
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!response.ok) throw new Error('TTS API request failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      setCurrentAudio(audio);
+      audio.play();
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setCurrentAudio(null);
+        isSpeakingRef.current = false;
+        processQueue();
+      };
+    } catch (error) {
+      console.error('Error in TTS processing:', error);
+      isSpeakingRef.current = false;
+      processQueue(); // Try next item in queue
+    }
+  }, [isTtsEnabled]);
+
+  const speak = useCallback((text: string) => {
+    if (!isTtsEnabled || !text) return;
+
+    const chunkText = (text: string, maxLength: number): string[] => {
+      const chunks: string[] = [];
+      let currentText = text;
+      while (currentText.length > 0) {
+        if (currentText.length <= maxLength) {
+          chunks.push(currentText);
+          break;
+        }
+        let sliceIndex = maxLength;
+        
+        const splitAt = Math.max(
+          currentText.substring(0, sliceIndex).lastIndexOf('。'),
+          currentText.substring(0, sliceIndex).lastIndexOf('！'),
+          currentText.substring(0, sliceIndex).lastIndexOf('？'),
+          currentText.substring(0, sliceIndex).lastIndexOf('.'),
+          currentText.substring(0, sliceIndex).lastIndexOf('!'),
+          currentText.substring(0, sliceIndex).lastIndexOf('?'),
+          currentText.substring(0, sliceIndex).lastIndexOf('\n'),
+          currentText.substring(0, sliceIndex).lastIndexOf('，'),
+          currentText.substring(0, sliceIndex).lastIndexOf(','),
+          currentText.substring(0, sliceIndex).lastIndexOf(' ')
+        );
+
+        if (splitAt > 0) {
+          sliceIndex = splitAt + 1;
+        }
+        
+        chunks.push(currentText.substring(0, sliceIndex));
+        currentText = currentText.substring(sliceIndex);
+      }
+      return chunks;
+    };
+
+    const textChunks = chunkText(text, 185);
+
+    audioQueueRef.current.push(...textChunks.filter(s => s.trim().length > 0));
+    if (!isSpeakingRef.current) {
+      processQueue();
+    }
+  }, [isTtsEnabled, processQueue]);
+
+  const stopSpeaking = useCallback(() => {
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.onended = null;
+      if (currentAudio.src.startsWith('blob:')) {
+        URL.revokeObjectURL(currentAudio.src);
+      }
+      setCurrentAudio(null);
+    }
+    audioQueueRef.current = [];
+    isSpeakingRef.current = false;
+  }, [currentAudio]);
+
+  useEffect(() => {
+    if (!isTtsEnabled) {
+      stopSpeaking();
+    }
+  }, [isTtsEnabled, stopSpeaking]);
+
+  return { speak, stopSpeaking };
 };
 
 const MODELS = [
@@ -64,225 +190,129 @@ export default function Home() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [modelId, setModelId] = useState('qwen-turbo');
+  const [modelId, setModelId] = useState('Qwen/Qwen3-8B');
+  const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
-  const [useThinkingMode, setUseThinkingMode] = useState(false);
+  const [useThinkingMode, setUseThinkingMode] = useState(true);
   const [isTtsEnabled, setIsTtsEnabled] = useState(false);
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const [systemPrompt, setSystemPrompt] = useState(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+  const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽，也可以鼓励。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。`);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const isSpeakingRef = useRef(false);
-  const audioQueueRef = useRef<string[]>([]);
-  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-
-  const speak = async (text: string, voice: string = '体虚生') => {
-    if (!isTtsEnabled || text.trim().length === 0) {
-      return;
-    }
-
-    console.log("正在合成语音，文本内容:", text);
-    try {
-      const response = await fetch(
-        `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=${voice}`
-      );
-      const result = await response.json();
-      if (result.code === 200 && result.data && result.data.audio_url) {
-        audioQueueRef.current.push(result.data.audio_url);
-        if (!isSpeakingRef.current) {
-          playNextAudio();
-        }
-      } else {
-        console.error("语音API返回成功但未提供音频地址，API返回:", result);
-      }
-    } catch (error) {
-      console.error("调用语音合成API失败:", error);
-    }
-  };
-
-  const playNextAudio = () => {
-    if (audioQueueRef.current.length > 0) {
-      isSpeakingRef.current = true;
-      const audioUrl = audioQueueRef.current.shift();
-      if (audioUrl) {
-        const audio = new Audio(`/api/tts-proxy?url=${encodeURIComponent(audioUrl)}`);
-        setCurrentAudio(audio);
-        audio.play().catch(e => {
-          console.error("音频播放失败:", e);
-          // Try to play the next one if this one fails
-          playNextAudio();
-        });
-        audio.onended = () => {
-          setCurrentAudio(null);
-          playNextAudio();
-        };
-      }
-    } else {
-      isSpeakingRef.current = false;
-    }
-  };
-
-  const stopSpeaking = () => {
-    if (currentAudio) {
-      currentAudio.pause();
-      setCurrentAudio(null);
-    }
-    audioQueueRef.current = [];
-    isSpeakingRef.current = false;
-  };
+  const formRef = useRef<HTMLFormElement>(null);
+  const isInitialLoad = useRef(true);
+  const { speak, stopSpeaking } = useAudio(isTtsEnabled);
 
   useEffect(() => {
-    if (attachments.length > 0 && useSearch) {
-      setUseSearch(false);
-    }
-  }, [attachments, useSearch]);
-
-  const activeConversation = conversations.find(c => c.id === activeConversationId);
-  const messages = activeConversation ? activeConversation.messages : [];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    try {
-      const storedConversations = localStorage.getItem('conversations');
-      if (storedConversations) {
-        try {
-          const loadedConversations = JSON.parse(storedConversations);
-          if (Array.isArray(loadedConversations) && loadedConversations.length > 0) {
-            setConversations(loadedConversations);
+    if (isInitialLoad.current) {
+      try {
+        const storedConversations = localStorage.getItem('conversations');
+        if (storedConversations) {
+          const parsedConversations = JSON.parse(storedConversations);
+          if (parsedConversations.length > 0) {
+            setConversations(parsedConversations);
             const storedActiveId = localStorage.getItem('activeConversationId');
-            if (storedActiveId && loadedConversations.some((c: Conversation) => c.id === storedActiveId)) {
+            if (storedActiveId && parsedConversations.some((c: Conversation) => c.id === storedActiveId)) {
               setActiveConversationId(storedActiveId);
             } else {
-              setActiveConversationId(loadedConversations[0].id);
+              setActiveConversationId(parsedConversations[0].id);
             }
           } else {
             handleNewChat();
           }
-        } catch (e) {
-          console.error("Failed to parse conversations from localStorage", e);
-          localStorage.removeItem('conversations'); // Clear corrupted data
+        } else {
           handleNewChat();
         }
-      } else {
+
+        const storedModelId = localStorage.getItem('modelId');
+        if (storedModelId && MODELS.some(m => m.id === storedModelId)) setModelId(storedModelId);
+        
+        const storedPrompt = localStorage.getItem('systemPrompt');
+        if (storedPrompt !== null) setSystemPrompt(storedPrompt);
+
+        const storedHistoryCollapsed = localStorage.getItem('isHistoryCollapsed');
+        if (storedHistoryCollapsed) setIsHistoryCollapsed(JSON.parse(storedHistoryCollapsed));
+
+        const storedThinkingMode = localStorage.getItem('useThinkingMode');
+        if (storedThinkingMode) setUseThinkingMode(JSON.parse(storedThinkingMode));
+
+        const storedUseSearch = localStorage.getItem('useSearch');
+        if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
+
+        const storedTtsEnabled = localStorage.getItem('isTtsEnabled');
+        if (storedTtsEnabled) setIsTtsEnabled(JSON.parse(storedTtsEnabled));
+
+      } catch (error) {
+        console.error("Failed to load from localStorage", error);
+        // If loading fails, start with a fresh state
         handleNewChat();
+      } finally {
+        isInitialLoad.current = false;
       }
-
-      const storedPrompt = localStorage.getItem('systemPrompt');
-      if (storedPrompt !== null) setSystemPrompt(storedPrompt);
-
-      const storedModelId = localStorage.getItem('modelId');
-      if (storedModelId && MODELS.some(m => m.id === storedModelId)) setModelId(storedModelId);
-
-      const storedThinkingMode = localStorage.getItem('useThinkingMode');
-      if (storedThinkingMode) setUseThinkingMode(JSON.parse(storedThinkingMode));
-
-      const storedUseSearch = localStorage.getItem('useSearch');
-      if (storedUseSearch) setUseSearch(JSON.parse(storedUseSearch));
-
-      const storedTtsEnabled = localStorage.getItem('isTtsEnabled');
-      if (storedTtsEnabled) setIsTtsEnabled(JSON.parse(storedTtsEnabled));
-
-      const storedHistoryCollapsed = localStorage.getItem('isHistoryCollapsed');
-      if (storedHistoryCollapsed) setIsHistoryCollapsed(JSON.parse(storedHistoryCollapsed));
-    } catch (error) {
-      console.error("Failed to load from localStorage", error);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    try {
-      if (conversations.length > 0) {
-        localStorage.setItem('conversations', JSON.stringify(conversations));
-      }
-      if (activeConversationId) {
-        localStorage.setItem('activeConversationId', activeConversationId);
-      }
-      localStorage.setItem('systemPrompt', systemPrompt);
-      localStorage.setItem('modelId', modelId);
-      localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
-      localStorage.setItem('useSearch', JSON.stringify(useSearch));
-      localStorage.setItem('isTtsEnabled', JSON.stringify(isTtsEnabled));
-      localStorage.setItem('isHistoryCollapsed', JSON.stringify(isHistoryCollapsed));
-    } catch (error) {
-      console.error("Failed to save to localStorage", error);
+    if (isInitialLoad.current) return; // Don't save state until initial load is complete
+    localStorage.setItem('conversations', JSON.stringify(conversations));
+    if (activeConversationId) {
+      localStorage.setItem('activeConversationId', activeConversationId);
     }
-  }, [conversations, activeConversationId, systemPrompt, modelId, useThinkingMode, useSearch, isTtsEnabled]);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    localStorage.setItem('modelId', modelId);
+    localStorage.setItem('systemPrompt', systemPrompt);
+    localStorage.setItem('isHistoryCollapsed', JSON.stringify(isHistoryCollapsed));
+    localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
+    localStorage.setItem('useSearch', JSON.stringify(useSearch));
+    localStorage.setItem('isTtsEnabled', JSON.stringify(isTtsEnabled));
+  }, [conversations, activeConversationId, modelId, systemPrompt, isHistoryCollapsed, useThinkingMode, useSearch, isTtsEnabled]);
 
   const generateConversationTitle = async (conversation: Conversation) => {
-    if (conversation.messages.length < 2) return;
-
-    const firstUserMessage = conversation.messages.find(m => m.role === 'user');
-    if (!firstUserMessage) return;
-
     try {
       const response = await fetch('/api/generate-title', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: conversation.messages }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: conversation.messages.slice(0, 2) }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) return;
+      const { title } = await response.json();
+      if (title) {
+        setConversations(prevConvos =>
+          prevConvos.map(c => (c.id === conversation.id ? { ...c, title } : c))
+        );
       }
-
-      const data = await response.json();
-      const newTitle = data.title || firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
-
-      const updatedConversations = conversations.map(c =>
-        c.id === conversation.id ? { ...c, title: newTitle } : c
-      );
-      setConversations(updatedConversations);
     } catch (error) {
-      console.error('Failed to generate conversation title:', error);
-      // Fallback to simple title if API call fails
-      const newTitle = firstUserMessage.content.substring(0, 20) + (firstUserMessage.content.length > 20 ? '...' : '');
-      const updatedConversations = conversations.map(c =>
-        c.id === conversation.id ? { ...c, title: newTitle } : c
-      );
-      setConversations(updatedConversations);
+      console.error('Error generating conversation title:', error);
     }
   };
 
-
   useEffect(() => {
-    // This effect is for generating a title after the first exchange.
-    if (isLoading) return; // Don't run while AI is responding.
-
+    if (isLoading) return;
     const conversationToUpdate = conversations.find(convo => 
       convo.id === activeConversationId &&
       convo.messages.length === 2 &&
       convo.title.startsWith('新对话')
     );
-
-    if (conversationToUpdate) {
-      generateConversationTitle(conversationToUpdate);
-    }
+    if (conversationToUpdate) generateConversationTitle(conversationToUpdate);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, activeConversationId, isLoading]);
 
+  const activeConversation = conversations.find(c => c.id === activeConversationId);
+  const messages = activeConversation ? activeConversation.messages : [];
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleOpenPromptModal = () => {
     setModalSystemPrompt(systemPrompt);
     setIsPromptModalOpen(true);
   };
 
-  const handleClosePromptModal = () => {
-    setIsPromptModalOpen(false);
-  };
+  const handleClosePromptModal = () => setIsPromptModalOpen(false);
 
   const handleSavePrompt = () => {
     setSystemPrompt(modalSystemPrompt);
@@ -290,216 +320,48 @@ export default function Home() {
   };
 
   const handleResetPrompt = () => {
-    setModalSystemPrompt(`（提示词：你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽他，也可以鼓励他。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。）`);
+    setModalSystemPrompt(`你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽，也可以鼓励。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。`);
   };
 
-  const handleCopyMessage = async (content: string) => {
-    try {
-      await navigator.clipboard.writeText(content);
-      // You might want to add a toast notification here to confirm the copy.
-      alert('已复制到剪贴板!');
-    } catch (err) {
-      console.error('Failed to copy message: ', err);
-    }
-  };
-
-  const handleRegenerate = async (messageId: string, isFromEdit = false, messagesToRegenerate?: Message[]) => {
+  const handleRegenerate = async (messageId: string) => {
     stopSpeaking();
     if (!activeConversationId || isLoading) return;
-
-    let messagesForApi: Message[];
-
-    if (isFromEdit && messagesToRegenerate) {
-      // If it's an edit, use the messages passed from handleSaveEdit
-      messagesForApi = messagesToRegenerate;
-    } else {
-      // For a normal regenerate, find the conversation and slice as before
-      const currentConversation = conversations.find(c => c.id === activeConversationId);
-      if (!currentConversation) return;
-
-      let messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
-      // The assistant message is the one to replace, so we go back one.
-      messageIndex = messageIndex - 1;
-      if (messageIndex < 0) return;
-      messagesForApi = currentConversation.messages.slice(0, messageIndex + 1);
-    }
-
+    const currentConversation = conversations.find(c => c.id === activeConversationId);
+    if (!currentConversation) return;
+    const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+    if (messageIndex < 1) return;
+    const messagesForApi = currentConversation.messages.slice(0, messageIndex);
     const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
-
-    setConversations(prevConvos =>
-      prevConvos.map(c =>
-        c.id === activeConversationId
-          ? { ...c, messages: [...messagesForApi, assistantPlaceholder] }
-          : c
-      )
-    );
-    setIsLoading(true);
-
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          messages: messagesForApi,
-          systemPrompt,
-          modelId,
-          useSearch,
-          useThinkingMode,
-          attachments: attachments.map(a => a.preview)
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to get response from server for regeneration.');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let aiResponse = '';
-      let buffer = '';
-      let sentenceBuffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.trim() === '') continue;
-
-          if (line.startsWith('event: searching')) {
-            setConversations(prevConvos =>
-              prevConvos.map(convo => {
-                if (convo.id !== activeConversationId) return convo;
-                const updatedMessages = [...convo.messages];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
-                if (lastMessage && lastMessage.role === 'assistant') {
-                  lastMessage.thinking = '搜索中...';
-                }
-                return { ...convo, messages: updatedMessages };
-              })
-            );
-          } else if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-            if (data.trim() === '[DONE]') {
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage) {
-                    delete lastMessage.thinking;
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
-              break;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              // Add a check to prevent parsing errors on empty/malformed data
-              if (parsed.choices && parsed.choices.length > 0) {
-                const content = parsed.choices[0]?.delta?.content || '';
-                aiResponse += content;
-              }
-
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage && lastMessage.role === 'assistant') {
-                    lastMessage.content = aiResponse;
-                    if (aiResponse && lastMessage.thinking) {
-                      delete lastMessage.thinking;
-                    }
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
-            } catch (e) {
-              console.error('Error parsing stream data for regeneration:', e);
-            }
-          }
-        }
-      }
-
-      // Speak the entire response at once
-      if (aiResponse.trim() && isTtsEnabled) {
-        speak(aiResponse.trim());
-      }
-
-    } catch (error) {
-      if ((error as Error).name !== 'AbortError') {
-        console.error(error);
-        setConversations(prevConvos =>
-          prevConvos.map(convo => {
-            if (convo.id !== activeConversationId) return convo;
-            const updatedMessages = [...convo.messages];
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            if (lastMessage && lastMessage.role === 'assistant') {
-              lastMessage.content = `抱歉，重新生成出错了: ${(error as Error).message}`;
-              delete lastMessage.thinking;
-            }
-            return { ...convo, messages: updatedMessages };
-          })
-        );
-      }
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
+    setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...messagesForApi, assistantPlaceholder] } : c));
+    await fetchAndStreamResponse(messagesForApi);
   };
 
   const handleDeleteMessage = (messageId: string) => {
     if (!activeConversationId) return;
-
-    const updatedConversations = conversations.map(convo => {
-      if (convo.id === activeConversationId) {
-        const messageIndex = convo.messages.findIndex(m => m.id === messageId);
+    setConversations(convos => convos.map(c => {
+      if (c.id === activeConversationId) {
+        const messageIndex = c.messages.findIndex(m => m.id === messageId);
         if (messageIndex !== -1) {
-          // Remove the message and all subsequent messages
-          const updatedMessages = convo.messages.slice(0, messageIndex);
-          return { ...convo, messages: updatedMessages };
+          return { ...c, messages: c.messages.slice(0, messageIndex) };
         }
       }
-      return convo;
-    });
-
-    setConversations(updatedConversations);
+      return c;
+    }));
   };
 
-  const handleSaveEdit = (messageId: string, newContent: string) => {
+  const handleSaveEdit = async (messageId: string, newContent: string) => {
     if (!activeConversationId || isLoading) return;
-
     const convoToUpdate = conversations.find(c => c.id === activeConversationId);
     if (!convoToUpdate) return;
-
     const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
-
-    // Create a new message list, truncated and with the updated content
-    const newMessages = convoToUpdate.messages.slice(0, messageIndex + 1);
-    newMessages[messageIndex] = { ...newMessages[messageIndex], content: newContent };
-
-    // Update the state to show the edit and truncation immediately
-    setConversations(prev => prev.map(c =>
-      c.id === activeConversationId ? { ...c, messages: newMessages } : c
-    ));
-
-    // Then, trigger regeneration, passing the correct message list to avoid stale state issues
-    handleRegenerate(messageId, true, newMessages);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex);
+    const editedUserMessage: Message = { ...convoToUpdate.messages[messageIndex], content: newContent };
+    newMessages.push(editedUserMessage);
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '编辑后重新思考中...' };
+    newMessages.push(assistantPlaceholder);
+    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages } : c));
+    await fetchAndStreamResponse(newMessages.slice(0, -1));
   };
 
   const [isRecording, setIsRecording] = useState(false);
@@ -513,14 +375,11 @@ export default function Home() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorderRef.current = new MediaRecorder(stream);
-        mediaRecorderRef.current.ondataavailable = (event) => {
-          audioChunksRef.current.push(event.data);
-        };
+        mediaRecorderRef.current.ondataavailable = (event) => audioChunksRef.current.push(event.data);
         mediaRecorderRef.current.onstop = async () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           audioChunksRef.current = [];
           await handleSendAudio(audioBlob);
-          // Stop all tracks on the stream
           stream.getTracks().forEach(track => track.stop());
         };
         audioChunksRef.current = [];
@@ -546,20 +405,16 @@ export default function Home() {
     setIsTranscribing(true);
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.webm");
-
     try {
-      const response = await fetch('/api/audio/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('/api/audio/transcribe', { method: 'POST', body: formData });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || '语音识别失败');
       }
-
       const data = await response.json();
       setInput(prevInput => prevInput + data.text);
+      // Automatically submit after transcription
+      setTimeout(() => formRef.current?.requestSubmit(), 100);
     } catch (error) {
       console.error("Error transcribing audio:", error);
       alert(error instanceof Error ? error.message : String(error));
@@ -571,57 +426,43 @@ export default function Home() {
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      if (input.trim() && !isLoading) {
-        event.currentTarget.form?.requestSubmit();
-      }
+      if (input.trim() && !isLoading) formRef.current?.requestSubmit();
     }
   };
 
-  const compressImage = async (file: File, maxSize: number = 1024): Promise<string> => {
+  const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.onload = () => {
-        URL.revokeObjectURL(img.src); // Revoke Object URL after loading
+        URL.revokeObjectURL(img.src);
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
-          return;
-        }
-
+        if (!ctx) return reject(new Error('Failed to get canvas context'));
         let { width, height } = img;
-        const MAX_WIDTH = 2048;
-        const MAX_HEIGHT = 2048;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
+        const MAX_DIM = 2048;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height *= MAX_DIM / width;
+            width = MAX_DIM;
+          } else {
+            width *= MAX_DIM / height;
+            height = MAX_DIM;
           }
         }
-
         canvas.width = width;
         canvas.height = height;
-
         ctx.drawImage(img, 0, 0, width, height);
-
         resolve(canvas.toDataURL('image/jpeg', 0.9));
       };
       img.onerror = (err) => {
-        URL.revokeObjectURL(img.src); // Revoke Object URL on error
+        URL.revokeObjectURL(img.src);
         reject(err);
       };
     });
   };
 
   useEffect(() => {
-    // Scroll to the bottom of the messages container
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
@@ -629,11 +470,7 @@ export default function Home() {
   }, [input]);
 
   const handleNewChat = () => {
-    const newConversation: Conversation = {
-      id: uuidv4(),
-      title: `新对话 ${conversations.length + 1}`,
-      messages: [],
-    };
+    const newConversation: Conversation = { id: uuidv4(), title: `新对话 ${conversations.length + 1}`, messages: [] };
     setConversations(prev => [...prev, newConversation]);
     setActiveConversationId(newConversation.id);
   };
@@ -643,45 +480,12 @@ export default function Home() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsLoading(false);
-      if (currentAudio) {
-        currentAudio.pause();
-        setCurrentAudio(null);
-      }
-      audioQueueRef.current = [];
-      isSpeakingRef.current = false;
+      stopSpeaking();
     }
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    stopSpeaking();
-    if (!input.trim() || !activeConversationId || isLoading) return;
-
-    const currentConversation = conversations.find(c => c.id === activeConversationId);
-    if (!currentConversation) return;
-
-    let finalInput = input;
-    if (useThinkingMode) {
-      finalInput = `请一步一步深度思考，然后细致回答问题，写出你的思考过程，格式：首先_然后_所以。问题： ${input}`;
-    }
-
-    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
-    const userMessageForApi: Message = { id: userMessageForDisplay.id, role: 'user', content: finalInput, attachments: attachments.map(a => a.preview) };
-    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
-
-    const messagesForApi = [...currentConversation.messages, userMessageForApi];
-
-    setConversations(prevConvos =>
-      prevConvos.map(c =>
-        c.id === activeConversationId
-          ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] }
-          : c
-      )
-    );
-    setInput('');
-    setAttachments([]);
+  const fetchAndStreamResponse = async (messagesForApi: Message[]) => {
     setIsLoading(true);
-
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -700,103 +504,79 @@ export default function Home() {
         }),
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to get response from server.');
-      }
+      if (!response.ok || !response.body) throw new Error('Failed to get response from server.');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let aiResponse = '';
       let buffer = '';
-      let sentenceBuffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           if (line.trim() === '') continue;
-
           if (line.startsWith('event: searching')) {
-            setConversations(prevConvos =>
-              prevConvos.map(convo => {
-                if (convo.id !== activeConversationId) return convo;
-                const updatedMessages = [...convo.messages];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
-                if (lastMessage && lastMessage.role === 'assistant') {
-                  lastMessage.thinking = '搜索中...';
-                }
-                return { ...convo, messages: updatedMessages };
-              })
-            );
+            setConversations(prevConvos => prevConvos.map(convo => {
+              if (convo.id !== activeConversationId) return convo;
+              const updatedMessages = [...convo.messages];
+              const lastMessage = updatedMessages[updatedMessages.length - 1];
+              if (lastMessage?.role === 'assistant') lastMessage.thinking = '搜索中...';
+              return { ...convo, messages: updatedMessages };
+            }));
           } else if (line.startsWith('data: ')) {
             const data = line.substring(6);
             if (data.trim() === '[DONE]') {
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage) {
-                    delete lastMessage.thinking;
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
+              setConversations(prevConvos => prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage) delete lastMessage.thinking;
+                return { ...convo, messages: updatedMessages };
+              }));
               break;
             }
             try {
               const parsed = JSON.parse(data);
-              // Add a check to prevent parsing errors on empty/malformed data
               if (parsed.choices && parsed.choices.length > 0) {
-                const content = parsed.choices[0]?.delta?.content || '';
-                aiResponse += content;
+                aiResponse += parsed.choices[0]?.delta?.content || '';
               }
-
-              setConversations(prevConvos =>
-                prevConvos.map(convo => {
-                  if (convo.id !== activeConversationId) return convo;
-                  const updatedMessages = [...convo.messages];
-                  const lastMessage = updatedMessages[updatedMessages.length - 1];
-                  if (lastMessage && lastMessage.role === 'assistant') {
-                    lastMessage.content = aiResponse;
-                    if (aiResponse && lastMessage.thinking) {
-                      delete lastMessage.thinking;
-                    }
-                  }
-                  return { ...convo, messages: updatedMessages };
-                })
-              );
+              setConversations(prevConvos => prevConvos.map(convo => {
+                if (convo.id !== activeConversationId) return convo;
+                const updatedMessages = [...convo.messages];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                if (lastMessage?.role === 'assistant') {
+                  lastMessage.content = aiResponse;
+                  if (aiResponse && lastMessage.thinking) delete lastMessage.thinking;
+                }
+                return { ...convo, messages: updatedMessages };
+              }));
             } catch (e) {
               console.error('Error parsing stream data:', e);
             }
           }
         }
       }
-
-      // Speak the entire response at once
       if (aiResponse.trim() && isTtsEnabled) {
         speak(aiResponse.trim());
       }
     } catch (error) {
       if ((error as Error).name !== 'AbortError') {
         console.error(error);
-        setConversations(prevConvos =>
-          prevConvos.map(convo => {
-            if (convo.id !== activeConversationId) return convo;
-            const updatedMessages = [...convo.messages];
-            const lastMessage = updatedMessages[updatedMessages.length - 1];
-            if (lastMessage && lastMessage.role === 'assistant') {
-              lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
-              delete lastMessage.thinking;
-            }
-            return { ...convo, messages: updatedMessages };
-          })
-        );
+        setConversations(prevConvos => prevConvos.map(convo => {
+          if (convo.id !== activeConversationId) return convo;
+          const updatedMessages = [...convo.messages];
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+          if (lastMessage?.role === 'assistant') {
+            lastMessage.content = `抱歉 出错了: ${(error as Error).message}. 请重试 或联系FELIX：felix@feli.qzz.io`;
+            delete lastMessage.thinking;
+          }
+          return { ...convo, messages: updatedMessages };
+        }));
       }
     } finally {
       setIsLoading(false);
@@ -804,8 +584,25 @@ export default function Home() {
     }
   };
 
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    stopSpeaking();
+    if (!input.trim() || !activeConversationId || isLoading) return;
+    const currentConversation = conversations.find(c => c.id === activeConversationId);
+    if (!currentConversation) return;
+    let finalInput = useThinkingMode ? `请一步一步深度思考，然后细致回答问题，写出你的思考过程，格式：首先_然后_所以。问题： ${input}` : input;
+    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
+    const userMessageForApi: Message = { ...userMessageForDisplay, content: finalInput };
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
+    const messagesForApi = [...currentConversation.messages, userMessageForApi];
+    setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] } : c));
+    setInput('');
+    setAttachments([]);
+    await fetchAndStreamResponse(messagesForApi);
+  };
+
   return (
-    <div className="flex h-screen bg-gray-900 text-white">
+    <div className="flex h-screen bg-background text-primary font-sans animate-fade-in">
       <History 
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -813,29 +610,35 @@ export default function Home() {
         setConversations={setConversations}
         isCollapsed={isHistoryCollapsed}
         setIsCollapsed={setIsHistoryCollapsed}
+        onNewChat={handleNewChat}
       />
-      <div className="relative flex flex-1 flex-col">
-        <header className="bg-gray-800 shadow-md p-4 flex justify-between items-center gap-4">
-          <h1 className="text-xl font-bold">FLXChat</h1>
+      <div className="relative flex flex-1 flex-col bg-surface">
+        <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
+          <h1 className="text-xl font-bold text-primary">FLXChat</h1>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <select
-                value={modelId}
-                onChange={(e) => setModelId(e.target.value)}
-                className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 appearance-none"
-              >
-                {MODELS.map((model) => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-              </div>
+              <button onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)} className="px-4 py-2 bg-surface rounded-md hover:bg-gray-700 transition-colors text-sm flex items-center gap-2">
+                {MODELS.find(m => m.id === modelId)?.name || 'Select Model'}
+                <svg className={`w-4 h-4 transition-transform ${isModelSelectorOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+              <AnimatePresence>
+                {isModelSelectorOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full mt-2 w-full bg-surface border border-border-color rounded-md shadow-lg z-20"
+                  >
+                    {MODELS.map(model => (
+                      <div key={model.id} onClick={() => { setModelId(model.id); setIsModelSelectorOpen(false); }} className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm">
+                        {model.name}
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-            <button 
-              onClick={handleNewChat}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap"
-            >
+            <button onClick={handleNewChat} className="bg-accent hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap transition-colors">
               新对话
             </button>
           </div>
@@ -848,219 +651,59 @@ export default function Home() {
                   <motion.div
                     key={message.id}
                     layout
-                    initial={{ opacity: 0, scale: 0.8, y: 50 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.8, y: 50 }}
-                    transition={{ duration: 0.3 }}
-                    className={`flex items-start ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {/* User message buttons */}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    transition={{ duration: 0.3, ease: "easeOut" }}
+                    className={`flex items-start gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
                     {message.role === 'user' && (
-                      <div className="flex items-center self-center mr-2 space-x-1">
-                        <button
-                          onClick={() => {
-                            const newContent = prompt('修改你的消息：', message.content);
-                            if (newContent !== null && newContent !== message.content) {
-                              handleSaveEdit(message.id, newContent);
-                            }
-                          }}
-                          className="p-1 text-gray-400 hover:text-white"
-                          title="修改"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMessage(message.id)}
-                          className="p-1 text-gray-400 hover:text-white"
-                          title="撤回"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                        </button>
+                      <div className="flex items-center self-center mr-2 space-x-1 transition-opacity">
+                        <button onClick={() => { const newContent = prompt('修改你的消息：', message.content); if (newContent !== null && newContent !== message.content) handleSaveEdit(message.id, newContent); }} className="p-1 text-secondary hover:text-primary" title="修改"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                        <button onClick={() => handleDeleteMessage(message.id)} className="p-1 text-secondary hover:text-primary" title="撤回"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
                       </div>
                     )}
-
-                    {/* Message bubble */}
-                    <div className={`max-w-3xl p-3 rounded-lg ${message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'}`}>
+                    <div className={`max-w-3xl p-4 rounded-xl group ${message.role === 'user' ? 'bg-accent text-white' : 'bg-background'}`}>
                         {message.attachments && message.attachments.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-2">
-                            {message.attachments.map((attachment, index) => (
-                              <img key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg" />
-                            ))}
+                            {message.attachments.map((attachment, index) => (<img key={index} src={attachment} alt={`attachment ${index + 1}`} className="max-w-xs max-h-48 rounded-lg" />))}
                           </div>
                         )}
-                        <div className="prose prose-invert max-w-none rounded-lg">
-                          {message.content ? (
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm]}
-                              components={{
-                                code: CodeBlock,
-                                a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
-                          ) : message.thinking ? (
-                            <div className="flex items-center gap-2 text-sm text-gray-400">
-                              <div className="w-4 h-4 border-t-2 border-gray-400 rounded-full animate-spin"></div>
-                              <span>{message.thinking}</span>
-                            </div>
-                          ) : null}
+                        <div className="prose prose-invert max-w-none prose-p:my-2 prose-headings:my-3">
+                          {message.content ? (<ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlock, a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline"/> }}>{message.content}</ReactMarkdown>) : message.thinking ? (<ThinkingIndicator text={message.thinking} />) : null}
                         </div>
-                      </div>
-
-                    {/* Assistant message buttons */}
+                    </div>
                     {message.role === 'assistant' && message.content && !isLoading && (
-                      <div className="flex items-center self-center ml-2 space-x-1">
-                        <button
-                          onClick={() => handleCopyMessage(message.content)}
-                          className="p-1 text-gray-400 hover:text-white"
-                          title="复制"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                        </button>
-                        <button
-                          onClick={() => handleRegenerate(message.id)}
-                          className="p-1 text-gray-400 hover:text-white"
-                          title="重新生成"
-                        >
-                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        </button>
+                      <div className="flex items-center self-center ml-2 space-x-1 transition-opacity">
+                        <button onClick={() => navigator.clipboard.writeText(message.content)} className="p-1 text-secondary hover:text-primary" title="复制"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+                        <button onClick={() => handleRegenerate(message.id)} className="p-1 text-secondary hover:text-primary" title="重新生成"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></button>
                       </div>
                     )}
                   </motion.div>
                 ))}
-              </AnimatePresence>
-
+            </AnimatePresence>
             <div ref={messagesEndRef} />
           </div>
         </main>
 
-        <footer className="bg-gray-800 p-4">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between text-sm text-gray-400">
+        <footer className="bg-background/80 backdrop-blur-sm border-t border-border-color p-4">
+          <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between text-sm text-secondary">
               <div className="flex items-center gap-6">
-                <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer">
-                  <input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  <span className="ms-3 text-sm font-medium text-gray-300">思考模式</span>
-                </label>
-                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer">
-                  <input id="tts-mode" type="checkbox" className="sr-only peer" checked={isTtsEnabled} onChange={(e) => setIsTtsEnabled(e.target.checked)} />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  <span className="ms-3 text-sm font-medium text-gray-300">语音播报</span>
-                </label>
-                <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                  <input
-                    id="search-mode"
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={useSearch}
-                    onChange={(e) => setUseSearch(e.target.checked)}
-                    disabled={attachments.length > 0 || !['Qwen/Qwen3-8B', 'THUDM/GLM-Z1-9B-0414', 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', 'THUDM/GLM-4.1V-9B-Thinking'].includes(modelId)}
-                  />
-                  <div className="relative w-11 h-6 bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                  <span className="ms-3 text-sm font-medium text-gray-300">网络搜索</span>
-                </label>
+                <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer"><input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">思考模式</span></label>
+                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer"><input id="tts-mode" type="checkbox" className="sr-only peer" checked={isTtsEnabled} onChange={(e) => setIsTtsEnabled(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">语音播报</span></label>
+                <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}><input id="search-mode" type="checkbox" className="sr-only peer" checked={useSearch} onChange={(e) => setUseSearch(e.target.checked)} disabled={attachments.length > 0 || !['Qwen/Qwen3-8B', 'THUDM/GLM-Z1-9B-0414', 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', 'THUDM/GLM-4.1V-9B-Thinking'].includes(modelId)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">网络搜索</span></label>
               </div>
-              <button
-                type="button"
-                onClick={handleOpenPromptModal}
-                disabled={isLoading}
-                className="bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap disabled:opacity-50"
-              >
-                自定义提示词
-              </button>
+              <button type="button" onClick={handleOpenPromptModal} disabled={isLoading} className="bg-surface hover:bg-gray-700 text-primary font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap disabled:opacity-50 transition-colors">自定义提示词</button>
             </div>
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {attachments.map((attachment, index) => (
-                  <div key={index} className="relative">
-                    <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" />
-                    <button
-                      type="button"
-                      onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
-                      className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs"
-                      style={{ transform: 'translate(50%, -50%)' }}
-                    >
-                      X
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="relative w-full flex items-center">
-              {['THUDM/GLM-4.1V-9B-Thinking',].includes(modelId) && (
-                <button
-                  type="button"
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  disabled={isLoading}
-                  className="p-2 text-gray-400 hover:text-white disabled:opacity-50"
-                  title="上传附件"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                </button>
-              )}
-              <input
-                type="file"
-                id="file-upload"
-                multiple
-                accept="image/*"
-                onChange={async (e) => {
-                  if (e.target.files) {
-                    const fileList = Array.from(e.target.files);
-                    const compressedFiles = await Promise.all(
-                      fileList.map(async (file) => ({ file, preview: await compressImage(file) }))
-                    );
-                    setAttachments(prev => [...prev, ...compressedFiles]);
-                  }
-                }}
-                className="hidden"
-              />
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")}
-                className="w-full p-3 pr-24 bg-gray-200 dark:bg-gray-800 text-black dark:text-white rounded-lg focus:outline-none resize-none disabled:opacity-50 transition-colors duration-200 max-h-40 overflow-y-auto"
-                rows={1}
-                disabled={isLoading || isTranscribing}
-              />
+            {attachments.length > 0 && (<div className="flex flex-wrap gap-2">{attachments.map((attachment, index) => (<div key={index} className="relative"><img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" /><button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs" style={{ transform: 'translate(50%, -50%)' }}>X</button></div>))}</div>)}
+            <div className="relative w-full flex items-center bg-background rounded-xl border border-border-color focus-within:ring-2 focus-within:ring-accent transition-all">
+              {['THUDM/GLM-4.1V-9B-Thinking'].includes(modelId) && (<button type="button" onClick={() => document.getElementById('file-upload')?.click()} disabled={isLoading} className="p-3 text-secondary hover:text-primary disabled:opacity-50" title="上传附件"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>)}
+              <input type="file" id="file-upload" multiple accept="image/*" onChange={async (e) => { if (e.target.files) { const fileList = Array.from(e.target.files); const compressedFiles = await Promise.all(fileList.map(async (file) => ({ file, preview: await compressImage(file) }))); setAttachments(prev => [...prev, ...compressedFiles]); } }} className="hidden" />
+              <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")} className="w-full p-3 bg-transparent text-primary rounded-lg focus:outline-none resize-none disabled:opacity-50 max-h-40 overflow-y-auto" rows={1} disabled={isLoading || isTranscribing} />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
-                <button
-                  type="button"
-                  onMouseDown={handleStartRecording}
-                  onMouseUp={handleStopRecording}
-                  onTouchStart={handleStartRecording}
-                  onTouchEnd={handleStopRecording}
-                  disabled={isLoading || isTranscribing}
-                  className={`p-2 rounded-full transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
-                  {isTranscribing ? (
-                    <div className="w-5 h-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/>
-                    </svg>
-                  )}
-                </button>
-                {isLoading ? (
-                  <button 
-                    type="button"
-                    onClick={handleStopGenerating}
-                    className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 flex items-center justify-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
-                  </button>
-                ) : (
-                  <button 
-                    type="submit" 
-                    disabled={!input.trim() || isTranscribing}
-                    className="p-2 rounded-full bg-blue-500 text-white hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                  </button>
-                )}
+                <button type="button" onMouseDown={handleStartRecording} onMouseUp={handleStopRecording} onTouchStart={handleStartRecording} onTouchEnd={handleStopRecording} disabled={isLoading || isTranscribing} className={`p-2 rounded-full transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : 'text-secondary hover:text-primary hover:bg-surface'}`}>{isTranscribing ? (<div className="w-5 h-5 border-t-2 border-accent rounded-full animate-spin"></div>) : (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/></svg>)}</button>
+                {isLoading ? (<button type="button" onClick={handleStopGenerating} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button>) : (<button type="submit" disabled={!input.trim() || isTranscribing} className="p-2 rounded-full bg-accent text-white hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>)}
               </div>
             </div>
           </form>
@@ -1068,55 +711,21 @@ export default function Home() {
 
         <AnimatePresence>
           {isPromptModalOpen && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-              className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
-            >
-              <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
-                <h2 className="text-xl font-bold mb-4">自定义系统提示词</h2>
-                <textarea
-                  placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。"
-                  value={modalSystemPrompt}
-                  onChange={(e) => setModalSystemPrompt(e.target.value)}
-                  className="w-full p-3 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base resize-y"
-                  rows={10}
-                />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+              <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-surface rounded-lg shadow-xl p-6 w-full max-w-2xl border border-border-color">
+                <h2 className="text-xl font-bold mb-4 text-primary">自定义系统提示词</h2>
+                <textarea placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。" value={modalSystemPrompt} onChange={(e) => setModalSystemPrompt(e.target.value)} className="w-full p-3 bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-accent text-base resize-y border border-border-color" rows={10} />
                 <div className="flex justify-between items-center mt-6">
                   <div>
-                    <button
-                      type="button"
-                      onClick={handleResetPrompt}
-                      className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg mr-2"
-                    >
-                      复位
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setModalSystemPrompt('')}
-                      className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg"
-                    >
-                      清除
-                    </button>
+                    <button type="button" onClick={handleResetPrompt} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg mr-2 transition-colors">复位</button>
+                    <button type="button" onClick={() => setModalSystemPrompt('')} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">清除</button>
                   </div>
                   <div className="flex gap-4">
-                    <button
-                      onClick={handleClosePromptModal}
-                      className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={handleSavePrompt}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"
-                    >
-                      保存
-                    </button>
+                    <button onClick={handleClosePromptModal} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">取消</button>
+                    <button onClick={handleSavePrompt} className="bg-accent hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">保存</button>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>

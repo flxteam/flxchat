@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Conversation } from '@/types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiEdit, FiTrash2, FiChevronsLeft, FiChevronsRight, FiPlus } from 'react-icons/fi';
 
 interface HistoryProps {
   conversations: Conversation[];
@@ -8,30 +10,37 @@ interface HistoryProps {
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
   isCollapsed: boolean;
   setIsCollapsed: (isCollapsed: boolean) => void;
+  onNewChat: () => void;
 }
 
-const History = ({ conversations, activeConversationId, setActiveConversationId, setConversations, isCollapsed, setIsCollapsed }: HistoryProps) => {
+const History = ({ conversations, activeConversationId, setActiveConversationId, setConversations, isCollapsed, setIsCollapsed, onNewChat }: HistoryProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
   const handleSelectConversation = (id: string) => {
-    setActiveConversationId(id);
+    if (id === activeConversationId) {
+      setIsCollapsed(true);
+    } else {
+      setActiveConversationId(id);
+      setIsCollapsed(true);
+    }
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteConversation = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
     const updatedConversations = conversations.filter(c => c.id !== id);
     setConversations(updatedConversations);
     if (activeConversationId === id) {
       if (updatedConversations.length > 0) {
         setActiveConversationId(updatedConversations[0].id);
       } else {
-        // Handle case where all conversations are deleted
-        // You might want to create a new one here.
+        onNewChat();
       }
     }
   };
 
-  const handleStartEditing = (conversation: Conversation) => {
+  const handleStartEditing = (e: React.MouseEvent, conversation: Conversation) => {
+    e.stopPropagation();
     setEditingId(conversation.id);
     setEditingTitle(conversation.title);
   };
@@ -47,26 +56,52 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
     setEditingTitle('');
   };
 
+  const sidebarVariants = {
+    open: { width: '288px', transition: { type: 'spring', stiffness: 300, damping: 30 } },
+    closed: { width: '80px', transition: { type: 'spring', stiffness: 300, damping: 30 } },
+  };
+
+  const itemVariants = {
+    open: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+    closed: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+  };
+
   return (
-    <div className={`bg-gray-800 flex flex-col transition-all duration-300 ease-in-out rounded-r-lg ${isCollapsed ? 'w-16' : 'w-64 p-4'}`}>
-      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} mb-4`}>
-        {!isCollapsed && <h2 className="text-lg font-bold">历史对话</h2>}
-        <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 hover:bg-gray-700 rounded-md">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            {isCollapsed ? 
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> : 
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            }
-          </svg>
+    <motion.div
+      variants={sidebarVariants}
+      animate={isCollapsed ? 'closed' : 'open'}
+      className="bg-surface/50 backdrop-blur-lg h-full flex flex-col rounded-r-2xl shadow-lg border-l border-white/10"
+    >
+      <div className="flex items-center justify-between p-4 border-b border-white/10">
+        <AnimatePresence>
+          {!isCollapsed && (
+            <motion.h2 
+              variants={itemVariants}
+              initial="closed"
+              animate="open"
+              exit="closed"
+              className="text-lg font-bold text-primary"
+            >
+              历史对话
+            </motion.h2>
+          )}
+        </AnimatePresence>
+        <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-2 text-secondary hover:text-primary hover:bg-white/10 rounded-full transition-colors">
+          {isCollapsed ? <FiChevronsRight size={20} /> : <FiChevronsLeft size={20} />}
         </button>
       </div>
-      {!isCollapsed && (
-        <div className="flex-1 overflow-y-auto">
-          {[...conversations].reverse().map(conversation => (
-            <div 
-              key={conversation.id} 
-              className={`p-2 my-1 rounded-md cursor-pointer flex justify-between items-center ${activeConversationId === conversation.id ? 'bg-blue-600' : 'hover:bg-gray-700'}`}
-            >
+
+      <div className="flex-1 overflow-y-auto p-2">
+        {[...conversations].reverse().map((conversation, index) => (
+          <motion.div
+            key={conversation.id}
+            layout
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0, transition: { delay: index * 0.05 } }}
+            className={`rounded-lg mb-2 cursor-pointer group ${activeConversationId === conversation.id ? 'bg-accent/20' : 'hover:bg-white/5'}`}
+            onClick={() => handleSelectConversation(conversation.id)}
+          >
+            <div className="p-3 flex justify-between items-center">
               {editingId === conversation.id ? (
                 <input 
                   type="text"
@@ -74,27 +109,56 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
                   onChange={(e) => setEditingTitle(e.target.value)}
                   onBlur={() => handleStopEditing(conversation.id)}
                   onKeyDown={(e) => e.key === 'Enter' && handleStopEditing(conversation.id)}
-                  className="bg-gray-600 text-white w-full rounded-md p-1 text-sm focus:outline-none"
+                  className="bg-transparent text-primary w-full focus:outline-none"
                   autoFocus
+                  onClick={(e) => e.stopPropagation()}
                 />
               ) : (
-                <span onClick={() => handleSelectConversation(conversation.id)} className="text-sm flex-1 truncate pr-2">
+                <span className="text-sm text-primary truncate flex-1 pr-2">
                   {conversation.title}
                 </span>
               )}
-              <div className="flex items-center">
-                  <button onClick={() => handleStartEditing(conversation)} className="p-1 hover:bg-gray-600 rounded-full text-gray-400 hover:text-white">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L17.5 2.5z" /></svg>
-                  </button>
-                  <button onClick={() => handleDeleteConversation(conversation.id)} className="p-1 hover:bg-gray-600 rounded-full text-gray-400 hover:text-white">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
-              </div>
+              <AnimatePresence>
+                {!isCollapsed && (
+                  <motion.div 
+                    variants={itemVariants}
+                    initial="closed"
+                    animate="open"
+                    exit="closed"
+                    className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <button onClick={(e) => handleStartEditing(e, conversation)} className="p-1 text-secondary hover:text-primary rounded-full">
+                      <FiEdit size={14} />
+                    </button>
+                    <button onClick={(e) => handleDeleteConversation(e, conversation.id)} className="p-1 text-red-500 hover:text-red-400 rounded-full">
+                      <FiTrash2 size={14} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <div className="p-4 border-t border-white/10">
+        <motion.button
+          onClick={onNewChat}
+          className="w-full flex items-center justify-center gap-2 p-3 bg-accent/80 hover:bg-accent text-white rounded-lg transition-colors"
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+        >
+          <FiPlus size={20} />
+          <AnimatePresence>
+            {!isCollapsed && (
+              <motion.span variants={itemVariants} initial="closed" animate="open" exit="closed">
+                新对话
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </div>
+    </motion.div>
   );
 };
 

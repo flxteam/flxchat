@@ -166,6 +166,18 @@ export async function POST(req: NextRequest) {
       finalMessages.push({ ...lastMsg, content: truncatedContent });
   }
 
+  const lastUserMessageForPrompt = finalMessages.findLast(m => m.role === 'user');
+  if (lastUserMessageForPrompt) {
+    if (typeof lastUserMessageForPrompt.content === 'string') {
+      lastUserMessageForPrompt.content = `（提示词：“${lastUserMessageForPrompt.content}”）`;
+    } else if (Array.isArray(lastUserMessageForPrompt.content)) {
+      const textPart = lastUserMessageForPrompt.content.find(part => part.type === 'text');
+      if (textPart) {
+        textPart.text = `（提示词：“${textPart.text}”）`;
+      }
+    }
+  }
+
   // Handle multimodal attachments
   if (modelId === 'THUDM/GLM-4.1V-9B-Thinking' && attachments && attachments.length > 0) {
     const lastUserMessage = finalMessages.findLast(m => m.role === 'user');

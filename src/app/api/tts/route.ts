@@ -25,18 +25,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Audio URL not found in response' }, { status: 500 });
     }
 
-    const proxyUrl = `${req.nextUrl.origin}/api/tts-proxy?url=${encodeURIComponent(audioUrl)}`;
-    const proxyResponse = await fetch(proxyUrl);
+    const audioResponse = await fetch(audioUrl);
 
-    if (!proxyResponse.ok) {
-      const errorText = await proxyResponse.text();
-      console.error('TTS proxy error:', errorText);
-      return NextResponse.json({ error: 'Failed to fetch audio from proxy', details: errorText }, { status: proxyResponse.status });
+    if (!audioResponse.ok) {
+      const errorText = await audioResponse.text();
+      console.error('Failed to fetch audio from audio_url:', errorText);
+      return NextResponse.json({ error: 'Failed to fetch audio from audio_url', details: errorText }, { status: audioResponse.status });
     }
 
-    const audioBlob = await proxyResponse.blob();
+    const audioBlob = await audioResponse.blob();
     const headers = new Headers();
-    headers.set('Content-Type', proxyResponse.headers.get('Content-Type') || 'audio/wav');
+    headers.set('Content-Type', audioResponse.headers.get('Content-Type') || 'audio/wav');
 
     return new NextResponse(audioBlob, { status: 200, headers });
 

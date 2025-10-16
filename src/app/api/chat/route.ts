@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     if (typeof lastUserMessageForPrompt.content === 'string') {
       lastUserMessageForPrompt.content = `（提示词：“${lastUserMessageForPrompt.content}”）`;
     } else if (Array.isArray(lastUserMessageForPrompt.content)) {
-      const textPart = lastUserMessageForPrompt.content.find(part => part.type === 'text');
+      const textPart = lastUserMessageForPrompt.content.find((part: any) => part.type === 'text');
       if (textPart) {
         textPart.text = `（提示词：“${textPart.text}”）`;
       }

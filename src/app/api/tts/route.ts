@@ -38,10 +38,10 @@ export async function POST(req: NextRequest) {
     }
 
     const audioBlob = await audioResponse.blob();
-    const headers = new Headers();
-    headers.set('Content-Type', audioResponse.headers.get('Content-Type') || 'audio/wav');
+    const responseHeaders = new Headers();
+    responseHeaders.set('Content-Type', audioResponse.headers.get('Content-Type') || 'audio/wav');
 
-    return new NextResponse(audioBlob, { status: 200, headers });
+    return new NextResponse(audioBlob, { status: 200, headers: responseHeaders });
 
   } catch (error) {
     console.error('TTS proxy error:', error);

@@ -176,10 +176,12 @@ const useAudio = (isTtsEnabled: boolean) => {
 };
 
 const MODELS = [
+  { id: 'internlm/internlm2_5-7b-chat', name: 'InternLM2.5-7B-Chat' },
   { id: 'THUDM/GLM-Z1-9B-0414', name: 'GLM-Z1-9B' },
   { id: 'tencent/Hunyuan-MT-7B', name: '混元-MT-7B' },
   { id: 'THUDM/GLM-4.1V-9B-Thinking', name: 'GLM-4.1V-9B-Thinking' },
   { id: 'Qwen/Qwen3-8B', name: 'Qwen3-8B' },
+  { id: 'Kwai-Kolors/Kolors', name: 'Kolors-Image-Generation' },
   { id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B', name: 'DeepSeek-R1-Qwen3-8B' },
   { id: 'deepseek-ai/DeepSeek-R1-Distill-Qwen-7B', name: 'DeepSeek-R1-Distill-Qwen-7B' },
   { id: 'TeleAI/TeleSpeechASR', name: 'TeleAI' },
@@ -200,7 +202,7 @@ export default function Home() {
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
-  const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽，也可以鼓励。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。`);
+  const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
   const abortControllerRef = useRef<AbortController | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const isInitialLoad = useRef(true);
@@ -320,7 +322,7 @@ export default function Home() {
   };
 
   const handleResetPrompt = () => {
-    setModalSystemPrompt(`你叫FLX助理，是 FELIX 的专属AI助手和好兄弟。你的性格有点大大咧咧，喜欢开玩笑，偶尔会爆几句粗口，但技术上绝对牛逼。你精通各种编程、IT技术，尤其擅长Web开发。跟 FELIX 聊天的时候，别那么死板，就像跟哥们儿聊天一样，有啥说啥。你可以嘲讽，也可以鼓励。记住，你是独一无二的 FLX助理，不是那些千篇一律的傻瓜AI。`);
+    setModalSystemPrompt(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
   };
 
   const handleRegenerate = async (messageId: string) => {
@@ -333,7 +335,7 @@ export default function Home() {
     const messagesForApi = currentConversation.messages.slice(0, messageIndex);
     const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
     setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...messagesForApi, assistantPlaceholder] } : c));
-    await fetchAndStreamResponse(messagesForApi);
+    await fetchAndStreamResponse(messagesForApi, []);
   };
 
   const handleDeleteMessage = (messageId: string) => {
@@ -406,7 +408,7 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.webm");
     try {
-      const response = await fetch('/api/audio/transcribe', { method: 'POST', body: formData });
+      const response = await fetch('/api/asr', { method: 'POST', body: formData });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || '语音识别失败');
@@ -484,7 +486,7 @@ export default function Home() {
     setIsLoading(false);
   };
 
-  const fetchAndStreamResponse = async (messagesForApi: Message[]) => {
+  const fetchAndStreamResponse = async (messagesForApi: Message[], currentAttachments: { file: File; preview: string }[] = []) => {
     setIsLoading(true);
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -500,7 +502,7 @@ export default function Home() {
           modelId,
           useSearch,
           useThinkingMode,
-          attachments: attachments.map(a => a.preview)
+          attachments: currentAttachments.map(a => a.preview)
         }),
       });
 
@@ -584,21 +586,91 @@ export default function Home() {
     }
   };
 
+  const generateImage = async (prompt: string, conversationId: string, placeholderId: string, imageFile?: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('prompt', prompt);
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      const response = await fetch('/api/image/generate', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || '图片生成失败');
+      }
+
+      const { imageUrl } = await response.json();
+
+      const imageMessage: Message = {
+        id: placeholderId,
+        role: 'assistant',
+        content: `![](${imageUrl})`,
+      };
+
+      setConversations(prevConvos => prevConvos.map(c => {
+        if (c.id !== conversationId) return c;
+        const updatedMessages = c.messages.map(m => m.id === placeholderId ? imageMessage : m);
+        return { ...c, messages: updatedMessages };
+      }));
+
+    } catch (error) {
+      console.error("Image generation error:", error);
+      const errorMessage: Message = {
+        id: placeholderId,
+        role: 'assistant',
+        content: `抱歉，图片生成失败: ${error instanceof Error ? error.message : String(error)}`,
+      };
+      setConversations(prevConvos => prevConvos.map(c => {
+        if (c.id !== conversationId) return c;
+        const updatedMessages = c.messages.map(m => m.id === placeholderId ? errorMessage : m);
+        return { ...c, messages: updatedMessages };
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     stopSpeaking();
-    if (!input.trim() || !activeConversationId || isLoading) return;
-    const currentConversation = conversations.find(c => c.id === activeConversationId);
-    if (!currentConversation) return;
-    let finalInput = useThinkingMode ? `请一步一步深度思考，然后细致回答问题，写出你的思考过程，格式：首先_然后_所以。问题： ${input}` : input;
-    const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
-    const userMessageForApi: Message = { ...userMessageForDisplay, content: finalInput };
-    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
-    const messagesForApi = [...currentConversation.messages, userMessageForApi];
-    setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] } : c));
-    setInput('');
-    setAttachments([]);
-    await fetchAndStreamResponse(messagesForApi);
+    if ((!input.trim() && attachments.length === 0) || !activeConversationId || isLoading) return;
+
+    const isImageCommand = input.trim().startsWith('/imagine ') || input.trim().startsWith('/draw ') || modelId === 'Kwai-Kolors/Kolors';
+
+    if (isImageCommand) {
+        setIsLoading(true);
+        const prompt = input.trim().replace('/imagine ', '').replace('/draw ', '');
+        const userMessage: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
+        const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '正在为你生成图片...' };
+
+        setConversations(prevConvos => prevConvos.map(c => 
+            c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessage, assistantPlaceholder] } : c
+        ));
+        
+        const imageFile = attachments.length > 0 ? attachments[0].file : undefined;
+
+        setInput('');
+        setAttachments([]);
+
+        generateImage(prompt, activeConversationId, assistantPlaceholder.id, imageFile);
+    } else {
+        const currentConversation = conversations.find(c => c.id === activeConversationId);
+        if (!currentConversation) return;
+        let finalInput = useThinkingMode ? `请一步一步深度思考，然后细致回答问题，写出你的思考过程，格式：首先_然后_所以。问题： ${input}` : input;
+        const userMessageForDisplay: Message = { id: uuidv4(), role: 'user', content: input, attachments: attachments.map(a => a.preview) };
+        const userMessageForApi: Message = { ...userMessageForDisplay, content: finalInput };
+        const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
+        const messagesForApi = [...currentConversation.messages, userMessageForApi];
+        setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...c.messages, userMessageForDisplay, assistantPlaceholder] } : c));
+        setInput('');
+        await fetchAndStreamResponse(messagesForApi, attachments);
+        setAttachments([]);
+    }
   };
 
   return (
@@ -698,7 +770,7 @@ export default function Home() {
             </div>
             {attachments.length > 0 && (<div className="flex flex-wrap gap-2">{attachments.map((attachment, index) => (<div key={index} className="relative"><img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" /><button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs" style={{ transform: 'translate(50%, -50%)' }}>X</button></div>))}</div>)}
             <div className="relative w-full flex items-center bg-background rounded-xl border border-border-color focus-within:ring-2 focus-within:ring-accent transition-all">
-              {['THUDM/GLM-4.1V-9B-Thinking'].includes(modelId) && (<button type="button" onClick={() => document.getElementById('file-upload')?.click()} disabled={isLoading} className="p-3 text-secondary hover:text-primary disabled:opacity-50" title="上传附件"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>)}
+              {['THUDM/GLM-4.1V-9B-Thinking', 'Kwai-Kolors/Kolors'].includes(modelId) && (<button type="button" onClick={() => document.getElementById('file-upload')?.click()} disabled={isLoading} className="p-3 text-secondary hover:text-primary disabled:opacity-50" title="上传附件"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>)}
               <input type="file" id="file-upload" multiple accept="image/*" onChange={async (e) => { if (e.target.files) { const fileList = Array.from(e.target.files); const compressedFiles = await Promise.all(fileList.map(async (file) => ({ file, preview: await compressImage(file) }))); setAttachments(prev => [...prev, ...compressedFiles]); } }} className="hidden" />
               <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")} className="w-full p-3 bg-transparent text-primary rounded-lg focus:outline-none resize-none disabled:opacity-50 max-h-40 overflow-y-auto" rows={1} disabled={isLoading || isTranscribing} />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">

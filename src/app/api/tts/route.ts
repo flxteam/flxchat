@@ -8,8 +8,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Text is required' }, { status: 400 });
     }
 
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    };
+
     const externalTtsUrl = `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text)}&voice=体虚生`;
-    const externalTtsResponse = await fetch(externalTtsUrl);
+    const externalTtsResponse = await fetch(externalTtsUrl, { headers });
 
     if (!externalTtsResponse.ok) {
       const errorText = await externalTtsResponse.text();
@@ -25,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Audio URL not found in response' }, { status: 500 });
     }
 
-    const audioResponse = await fetch(audioUrl);
+    const audioResponse = await fetch(audioUrl, { headers });
 
     if (!audioResponse.ok) {
       const errorText = await audioResponse.text();

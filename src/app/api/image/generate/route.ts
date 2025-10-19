@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       response = await fetch(SILICONFLOW_API_URL, {
         method: "POST",
         headers: baseHeaders, // Let fetch set Content-Type for FormData
-        body: imageToImageFormData,
+        body: imageToImageFormData as any, // HACK: Bypass FormData type issue in Next.js
       });
     } else {
       // 文生图

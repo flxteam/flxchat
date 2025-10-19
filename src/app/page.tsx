@@ -479,9 +479,9 @@ export default function Home() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      setIsLoading(false);
       stopSpeaking();
     }
+    setIsLoading(false);
   };
 
   const fetchAndStreamResponse = async (messagesForApi: Message[]) => {

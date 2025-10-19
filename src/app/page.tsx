@@ -196,7 +196,7 @@ export default function Home() {
   const [modalSystemPrompt, setModalSystemPrompt] = useState('');
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(true);
-  const [isTtsEnabled, setIsTtsEnabled] = useState(false);
+  const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);

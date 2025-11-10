@@ -417,7 +417,10 @@ export default function Home() {
     const formData = new FormData();
     formData.append("file", audioBlob, "recording.webm");
     try {
-      const response = await fetch('/api/asr', { method: 'POST', body: formData });
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData as BodyInit,
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || '语音识别失败');
@@ -708,7 +711,7 @@ export default function Home() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    className="absolute top-full mt-2 w-full bg-surface border border-border-color rounded-md shadow-lg z-20"
+                    className="absolute top-full right-0 mt-2 w-48 sm:w-full bg-surface border border-border-color rounded-md shadow-lg z-20"
                   >
                     {MODELS.map(model => (
                       <div key={model.id} onClick={() => { setModelId(model.id); setIsModelSelectorOpen(false); }} className="px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm">
@@ -720,12 +723,13 @@ export default function Home() {
               </AnimatePresence>
             </div>
             <button onClick={handleNewChat} className="bg-accent hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg text-sm whitespace-nowrap transition-colors">
-              新对话
+              <span className="hidden sm:inline">新对话</span>
+              <svg className="w-5 h-5 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
             </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4">
+        <main className="flex-1 overflow-y-auto p-2 sm:p-4">
           <div className="flex flex-col space-y-4">
             <AnimatePresence>
                 {messages.map((message) => (

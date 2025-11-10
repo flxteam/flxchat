@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    const prompt = formData.get("prompt") as string;
+    const prompt = String(formData.get("prompt") ?? "");
     const imageFile = formData.get("image") as File | null;
 
     if (!prompt) {
@@ -31,18 +31,22 @@ export async function POST(req: NextRequest) {
     let response;
 
     if (imageFile) {
-      // 图生图
+      // 图生图：为保证服务器端 fetch 的兼容性，将 Next.js 提供的 File 转为 Blob 并带上文件名
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: imageFile.type || "application/octet-stream" });
+      const filename = (imageFile as any).name ?? "image.png";
+
       const imageToImageFormData = new FormData();
-      imageToImageFormData.append("image", imageFile);
+      imageToImageFormData.append("image", blob, filename);
       imageToImageFormData.append("prompt", prompt);
       imageToImageFormData.append("model", "Kwai-Kolors/Kolors");
       imageToImageFormData.append("n", "1");
       imageToImageFormData.append("size", "1024x1024");
       imageToImageFormData.append("response_format", "url");
-      
+
       response = await fetch(SILICONFLOW_API_URL, {
         method: "POST",
-        headers: baseHeaders, // Let fetch set Content-Type for FormData
+        headers: baseHeaders, // 让 fetch 为 FormData 设置 Content-Type
         body: imageToImageFormData as any, // HACK: Bypass FormData type issue in Next.js
       });
     } else {
@@ -51,18 +55,16 @@ export async function POST(req: NextRequest) {
         ...baseHeaders,
         "Content-Type": "application/json",
       };
-      const requestBody = JSON.stringify({
-        model: "Kwai-Kolors/Kolors",
-        prompt: prompt,
-        n: 1,
-        size: "1024x1024",
-        response_format: "url",
-      });
-
       response = await fetch(SILICONFLOW_API_URL, {
         method: "POST",
         headers: textToImageHeaders,
-        body: requestBody,
+        body: JSON.stringify({
+          prompt: prompt,
+          model: "Kwai-Kolors/Kolors",
+          n: 1,
+          size: "1024x1024",
+          response_format: "url",
+        }),
       });
     }
 
@@ -76,7 +78,13 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await response.json();
-    const imageUrl = result.data?.[0]?.url;
+    // 支持两种返回：直接 url 或 base64 字符串（b64_json）
+    let imageUrl = result.data?.[0]?.url;
+    if (!imageUrl && result.data?.[0]?.b64_json) {
+      const b64 = result.data[0].b64_json;
+      const contentType = result.data[0].mime_type ?? "image/png";
+      imageUrl = `data:${contentType};base64,${b64}`;
+    }
 
     if (!imageUrl) {
       console.error("Image URL not found in SiliconFlow response:", result);

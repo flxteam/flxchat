@@ -68,7 +68,7 @@ const ThinkingIndicator = ({ text }: { text: string }) => (
   </motion.div>
 );
 
-const useAudio = (isTtsEnabled: boolean) => {
+const useAudio = (isTtsEnabled: boolean, voice: string) => {
   const isSpeakingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
@@ -85,19 +85,21 @@ const useAudio = (isTtsEnabled: boolean) => {
     }
 
     try {
-      const response = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (!response.ok) throw new Error('TTS API request failed');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+      const apiUrl = `/api/tts-proxy?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`TTS proxy request failed with status ${response.status}`);
+      }
+      
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      const audio = new Audio(audioUrl);
       setCurrentAudio(audio);
       audio.play();
       audio.onended = () => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(audioUrl);
         setCurrentAudio(null);
         isSpeakingRef.current = false;
         processQueue();
@@ -107,7 +109,7 @@ const useAudio = (isTtsEnabled: boolean) => {
       isSpeakingRef.current = false;
       processQueue(); // Try next item in queue
     }
-  }, [isTtsEnabled]);
+  }, [isTtsEnabled, voice]);
 
   const speak = useCallback((text: string) => {
     if (!isTtsEnabled || !text) return;
@@ -157,9 +159,6 @@ const useAudio = (isTtsEnabled: boolean) => {
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.onended = null;
-      if (currentAudio.src.startsWith('blob:')) {
-        URL.revokeObjectURL(currentAudio.src);
-      }
       setCurrentAudio(null);
     }
     audioQueueRef.current = [];
@@ -187,6 +186,11 @@ const MODELS = [
   { id: 'TeleAI/TeleSpeechASR', name: 'TeleAI' },
 ];
 
+const VOICES = [
+  { id: '体虚生', name: '正常' },
+  { id: '曼波', name: '曼波' },
+];
+
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -199,6 +203,7 @@ export default function Home() {
   const [useSearch, setUseSearch] = useState(false);
   const [useThinkingMode, setUseThinkingMode] = useState(true);
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
+  const [ttsVoice, setTtsVoice] = useState('体虚生');
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -206,7 +211,7 @@ export default function Home() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const isInitialLoad = useRef(true);
-  const { speak, stopSpeaking } = useAudio(isTtsEnabled);
+  const { speak, stopSpeaking } = useAudio(isTtsEnabled, ttsVoice);
 
   useEffect(() => {
     if (isInitialLoad.current) {
@@ -247,6 +252,9 @@ export default function Home() {
         const storedTtsEnabled = localStorage.getItem('isTtsEnabled');
         if (storedTtsEnabled) setIsTtsEnabled(JSON.parse(storedTtsEnabled));
 
+        const storedTtsVoice = localStorage.getItem('ttsVoice');
+        if (storedTtsVoice && VOICES.some(v => v.id === storedTtsVoice)) setTtsVoice(storedTtsVoice);
+
       } catch (error) {
         console.error("Failed to load from localStorage", error);
         // If loading fails, start with a fresh state
@@ -270,7 +278,8 @@ export default function Home() {
     localStorage.setItem('useThinkingMode', JSON.stringify(useThinkingMode));
     localStorage.setItem('useSearch', JSON.stringify(useSearch));
     localStorage.setItem('isTtsEnabled', JSON.stringify(isTtsEnabled));
-  }, [conversations, activeConversationId, modelId, systemPrompt, isHistoryCollapsed, useThinkingMode, useSearch, isTtsEnabled]);
+    localStorage.setItem('ttsVoice', ttsVoice);
+  }, [conversations, activeConversationId, modelId, systemPrompt, isHistoryCollapsed, useThinkingMode, useSearch, isTtsEnabled, ttsVoice]);
 
   const generateConversationTitle = async (conversation: Conversation) => {
     try {

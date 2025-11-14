@@ -8,7 +8,13 @@ export interface Message {
 }
 
 export interface Conversation {
-    id: string;
-    title: string;
-    messages: Message[];
+  id: string;
+  title: string;
+  messages: Message[];
+  systemPrompt: string;
+}
+
+export interface ThinkingMessage {
+  role: 'thinking';
+  content: string;
 }

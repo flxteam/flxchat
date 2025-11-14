@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, FormEvent, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Message, Conversation } from '@/types';
+import { Message, Conversation, ThinkingMessage } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -52,11 +52,11 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   );
 };
 
-const ThinkingIndicator = ({ text }: { text: string }) => (
+const ThinkingIndicator = ({ text, isThinking, onToggle }: { text: string; isThinking: boolean; onToggle: () => void }) => (
   <motion.div 
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
-    className="flex items-center gap-2 text-sm text-secondary animate-pulse"
+    className="flex items-center gap-2 text-sm text-secondary"
   >
     <div className="w-5 h-5 flex items-center justify-center">
       <svg className="animate-spin h-4 w-4 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -65,6 +65,9 @@ const ThinkingIndicator = ({ text }: { text: string }) => (
       </svg>
     </div>
     <span>{text}</span>
+    <button onClick={onToggle} className="ml-2 text-xs text-gray-400 hover:text-gray-200">
+      {isThinking ? '隐藏思考' : '显示思考'}
+    </button>
   </motion.div>
 );
 
@@ -181,6 +184,7 @@ export default function Home() {
   const [ttsVoice, setTtsVoice] = useState('体虚生');
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
   const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
+  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -339,15 +343,177 @@ export default function Home() {
     if (!activeConversationId || isLoading) return;
     const convoToUpdate = conversations.find(c => c.id === activeConversationId);
     if (!convoToUpdate) return;
+
     const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
     if (messageIndex === -1) return;
+
     const newMessages = convoToUpdate.messages.slice(0, messageIndex);
     const editedUserMessage: Message = { ...convoToUpdate.messages[messageIndex], content: newContent };
     newMessages.push(editedUserMessage);
+
     const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '编辑后重新思考中...' };
     newMessages.push(assistantPlaceholder);
+
     setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages } : c));
-    await fetchAndStreamResponse(newMessages.slice(0, -1));
+
+    await fetchAndStreamResponse(newMessages.slice(0, -1), []);
+  };
+
+  const fetchAndStreamResponse = async (messagesForApi: Message[], files: File[]) => {
+    setIsLoading(true);
+    abortControllerRef.current = new AbortController();
+
+    const formData = new FormData();
+    formData.append('messages', JSON.stringify(messagesForApi));
+    formData.append('modelId', modelId);
+    formData.append('systemPrompt', systemPrompt);
+    formData.append('useSearch', JSON.stringify(useSearch));
+    formData.append('useThinkingMode', JSON.stringify(useThinkingMode));
+    files.forEach(file => formData.append('files', file));
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        body: formData,
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const rawData = line.substring(6);
+            if (rawData === '[DONE]') {
+              setIsLoading(false);
+              return;
+            }
+            try {
+              const parsed = JSON.parse(rawData);
+              if (parsed.type === 'thinking') {
+                setConversations(prevConvos =>
+                  prevConvos.map(c => {
+                    if (c.id === activeConversationId) {
+                      const lastMessage = c.messages[c.messages.length - 1];
+                      if (lastMessage && lastMessage.role === 'assistant') {
+                        return {
+                          ...c,
+                          messages: [
+                            ...c.messages.slice(0, -1),
+                            { ...lastMessage, thinking: (lastMessage.thinking || '') + parsed.content },
+                          ],
+                        };
+                      }
+                    }
+                    return c;
+                  })
+                );
+              } else if (parsed.type === 'chunk') {
+                setConversations(prevConvos =>
+                  prevConvos.map(c => {
+                    if (c.id === activeConversationId) {
+                      const lastMessage = c.messages[c.messages.length - 1];
+                      if (lastMessage && lastMessage.role === 'assistant') {
+                        const newContent = lastMessage.content + parsed.content;
+                        speak(parsed.content);
+                        return {
+                          ...c,
+                          messages: [
+                            ...c.messages.slice(0, -1),
+                            { ...lastMessage, content: newContent },
+                          ],
+                        };
+                      }
+                    }
+                    return c;
+                  })
+                );
+              }
+            } catch (e) {
+              console.error('Error parsing stream data:', e);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching stream:', error);
+        setConversations(prevConvos =>
+          prevConvos.map(c => {
+            if (c.id === activeConversationId) {
+              const lastMessage = c.messages[c.messages.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant') {
+                return {
+                  ...c,
+                  messages: [
+                    ...c.messages.slice(0, -1),
+                    { ...lastMessage, content: `发生错误: ${error.message}` },
+                  ],
+                };
+              }
+            }
+            return c;
+          })
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() && attachments.length === 0) return;
+
+    stopSpeaking();
+
+    const userMessage: Message = { id: uuidv4(), role: 'user', content: input };
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
+
+    let messagesForApi: Message[];
+    if (activeConversation && activeConversation.messages.length > 0) {
+      setConversations(prevConvos =>
+        prevConvos.map(c =>
+          c.id === activeConversationId
+            ? { ...c, messages: [...c.messages, userMessage, assistantPlaceholder] }
+            : c
+        )
+      );
+      messagesForApi = [...activeConversation.messages, userMessage];
+    } else {
+      const newConversation: Conversation = {
+        id: activeConversationId || uuidv4(),
+        title: input.substring(0, 20) || '新对话',
+        messages: [userMessage, assistantPlaceholder],
+        systemPrompt: systemPrompt,
+      };
+      if (!conversations.find(c => c.id === newConversation.id)) {
+        setConversations(prev => [...prev, newConversation]);
+      } else {
+        setConversations(prev => prev.map(c => c.id === newConversation.id ? newConversation : c));
+      }
+      setActiveConversationId(newConversation.id);
+      messagesForApi = [userMessage];
+    }
+
+    setInput('');
+    setAttachments([]);
+
+    await fetchAndStreamResponse(messagesForApi, attachments.map(a => a.file));
   };
 
   const [isRecording, setIsRecording] = useState(false);

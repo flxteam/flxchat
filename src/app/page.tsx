@@ -419,7 +419,7 @@ export default function Home() {
     try {
       const response = await fetch('/api/transcribe', {
         method: 'POST',
-        body: formData as BodyInit,
+        body: formData,
       });
       if (!response.ok) {
         const errorData = await response.json();

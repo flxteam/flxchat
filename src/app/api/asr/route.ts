@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import FormData from "form-data";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,10 +15,7 @@ export async function POST(req: NextRequest) {
     // 将从客户端收到的文件添加到新的 FormData 中
     const formData = new FormData();
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-    formData.append("file", audioBuffer, {
-        filename: 'audio.webm', // SiliconFlow 需要一个文件名
-        contentType: audioFile.type,
-    });
+    formData.append("file", new Blob([audioBuffer], { type: audioFile.type }), 'audio.webm');
     formData.append("model", "alibaba/SenseVoiceSmall");
     formData.append("response_format", "json");
     // 你可以根据需要添加其他 SiliconFlow 支持的参数，例如 language

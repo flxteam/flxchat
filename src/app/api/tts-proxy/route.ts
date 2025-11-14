@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
 
     const externalApiUrl = `https://api.cenguigui.cn/api/speech/AiChat/?module=audio&text=${encodeURIComponent(text as string)}&voice=${encodeURIComponent(voice as string)}`;
 
+    console.log(`[TTS Proxy] Fetching external API: ${externalApiUrl}`);
+
     // 1. Call the external API to get the audio URL
     const externalApiResponse = await fetch(externalApiUrl);
     if (!externalApiResponse.ok) {
@@ -29,6 +31,8 @@ export async function GET(req: NextRequest) {
     }
 
     const audioUrl = data.data.audio_url;
+
+    console.log(`[TTS Proxy] Fetching audio file from: ${audioUrl}`);
 
     // 2. Fetch the actual audio file from the URL
     const audioResponse = await fetch(audioUrl);

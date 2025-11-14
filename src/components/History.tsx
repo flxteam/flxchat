@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Conversation } from '@/types';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Variants } from 'framer-motion';
 import { FiPlus, FiEdit, FiTrash2, FiChevronsLeft, FiChevronsRight } from 'react-icons/fi';
 
 interface HistoryProps {

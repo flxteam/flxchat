@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
     console.log(`[TTS Proxy] Fetching external API: ${externalApiUrl}`);
 
     // 1. Call the external API to get the audio URL
-    const externalApiResponse = await fetch(externalApiUrl);
+    const externalApiResponse = await fetch(externalApiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
+      }
+    });
     if (!externalApiResponse.ok) {
       console.error('External TTS API responded with status:', externalApiResponse.status);
       const errorBody = await externalApiResponse.text();
@@ -35,7 +39,11 @@ export async function GET(req: NextRequest) {
     console.log(`[TTS Proxy] Fetching audio file from: ${audioUrl}`);
 
     // 2. Fetch the actual audio file from the URL
-    const audioResponse = await fetch(audioUrl);
+    const audioResponse = await fetch(audioUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
+      }
+    });
     if (!audioResponse.ok) {
       throw new Error(`Failed to fetch audio file, status: ${audioResponse.status}`);
     }

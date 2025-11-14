@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Conversation } from '@/types';
-import { motion, AnimatePresence, Variants } from 'framer-motion';
-import { FiEdit, FiTrash2, FiChevronsLeft, FiChevronsRight, FiPlus } from 'react-icons/fi';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FiPlus, FiEdit, FiTrash2, FiChevronsLeft, FiChevronsRight } from 'react-icons/fi';
 
 interface HistoryProps {
   conversations: Conversation[];
@@ -130,7 +130,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
       </div>
 
       <div className="p-4 border-t border-white/10">
-        <button
+        <motion.button
           onClick={() => { onNewChat(); if (window.innerWidth < 768) setIsCollapsed(true); }}
           className="w-full flex items-center justify-center gap-2 p-3 bg-accent/80 hover:bg-accent text-white rounded-lg transition-colors"
           whileHover={{ scale: 1.02 }}
@@ -138,7 +138,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
         >
           <FiPlus size={20} />
           <span>新对话</span>
-        </button>
+        </motion.button>
       </div>
     </div>
   );

@@ -115,39 +115,10 @@ const useAudio = (isTtsEnabled: boolean, voice: string) => {
     if (!isTtsEnabled || !text) return;
 
     const chunkText = (text: string, maxLength: number): string[] => {
-      console.log('[chunkText] Input text length:', text.length);
-      console.log('[chunkText] Max length:', maxLength);
       const chunks: string[] = [];
-      let currentText = text;
-      while (currentText.length > 0) {
-        if (currentText.length <= maxLength) {
-          chunks.push(currentText);
-          break;
-        }
-        let sliceIndex = maxLength;
-        
-        const splitAt = Math.max(
-          currentText.substring(0, sliceIndex).lastIndexOf('。'),
-          currentText.substring(0, sliceIndex).lastIndexOf('！'),
-          currentText.substring(0, sliceIndex).lastIndexOf('？'),
-          currentText.substring(0, sliceIndex).lastIndexOf('.'),
-          currentText.substring(0, sliceIndex).lastIndexOf('!'),
-          currentText.substring(0, sliceIndex).lastIndexOf('?'),
-          currentText.substring(0, sliceIndex).lastIndexOf('\n'),
-          currentText.substring(0, sliceIndex).lastIndexOf('，'),
-          currentText.substring(0, sliceIndex).lastIndexOf(','),
-          currentText.substring(0, sliceIndex).lastIndexOf(' ')
-        );
-
-        if (splitAt > 0) {
-          sliceIndex = splitAt + 1;
-        }
-        
-        chunks.push(currentText.substring(0, sliceIndex));
-        currentText = currentText.substring(sliceIndex);
+      for (let i = 0; i < text.length; i += maxLength) {
+        chunks.push(text.substring(i, i + maxLength));
       }
-      console.log('[chunkText] Output chunks (lengths):', chunks.map(c => c.length));
-      console.log('[chunkText] Output chunks (content):', chunks);
       return chunks;
     };
 

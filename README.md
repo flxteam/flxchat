@@ -1,18 +1,18 @@
-# FLX Chat ⚡️
+# FLX AI ⚡️
 
 <!-- Badges -->
 <p align="center">
-  <a href="https://github.com/flxteam/flxchat/stargazers">
-    <img src="https://img.shields.io/github/stars/flxteam/flxchat?style=for-the-badge&logo=github&color=gold" alt="GitHub Stars">
+  <a href="https://github.com/flxteam/flx-ai/stargazers">
+    <img src="https://img.shields.io/github/stars/flxteam/flx-ai?style=for-the-badge&logo=github&color=gold" alt="GitHub Stars">
   </a>
-  <a href="https://github.com/flxteam/flxchat/network/members">
-    <img src="https://img.shields.io/github/forks/flxteam/flxchat?style=for-the-badge&logo=github&color=blue" alt="GitHub Forks">
+  <a href="https://github.com/flxteam/flx-ai/network/members">
+    <img src="https://img.shields.io/github/forks/flxteam/flx-ai?style=for-the-badge&logo=github&color=blue" alt="GitHub Forks">
   </a>
-  <a href="https://github.com/flxteam/flxchat/issues">
-    <img src="https://img.shields.io/github/issues/flxteam/flxchat?style=for-the-badge&logo=github&color=green" alt="GitHub Issues">
+  <a href="https://github.com/flxteam/flx-ai/issues">
+    <img src="https://img.shields.io/github/issues/flxteam/flx-ai?style=for-the-badge&logo=github&color=green" alt="GitHub Issues">
   </a>
-  <a href="https://github.com/flxteam/flxchat/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/flxteam/flxchat?style=for-the-badge&logo=github&color=lightgrey" alt="License">
+  <a href="https://github.com/flxteam/flx-ai/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/flxteam/flx-ai?style=for-the-badge&logo=github&color=lightgrey" alt="License">
   </a>
 </p>
 <p align="center">
@@ -56,8 +56,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/flxteam/flxchat.git
-cd flx-chat
+git clone https://github.com/flxteam/flx-ai.git
+cd flx-ai
 ```
 
 ### 2. 安装依赖
@@ -70,7 +70,7 @@ npm install
 
 ### 3. 配置环境变量
 
-在项目的根目录 (`flx-chat`) 创建一个名为 `.env.local` 的文件，并填入你的 SiliconFlow API 密钥和模型 ID。
+在项目的根目录 (`flx-ai`) 创建一个名为 `.env.local` 的文件，并填入你的 SiliconFlow API 密钥和模型 ID。
 
 ```env
 # .env.local
@@ -87,7 +87,7 @@ SILICONFLOW_MODEL_ID="Qwen/Qwen2-7B-Instruct"
 npm run dev
 ```
 
-现在，在你的浏览器中打开 `http://localhost:3000`，你就可以开始与 FLX Chat 对话了。
+现在，在你的浏览器中打开 `http://localhost:3000`，你就可以开始与 FLX AI 对话了。
 
 ## ☁️ 部署
 
@@ -105,4 +105,4 @@ npm run dev
 
 ## 📄 许可证
 
-本项目采用 [MIT License](https://github.com/flxteam/flxchat/blob/main/LICENSE) 授权。
+本项目采用 [MIT License](https://github.com/flxteam/flx-ai/blob/main/LICENSE) 授权。

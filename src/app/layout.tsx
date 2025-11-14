@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FLX Chat",
+  title: "FLX AI",
   description: "A new, disruptive chat product.",
   icons: {
     icon: "/favicon.png",

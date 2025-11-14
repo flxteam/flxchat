@@ -115,6 +115,8 @@ const useAudio = (isTtsEnabled: boolean, voice: string) => {
     if (!isTtsEnabled || !text) return;
 
     const chunkText = (text: string, maxLength: number): string[] => {
+      console.log('[chunkText] Input text length:', text.length);
+      console.log('[chunkText] Max length:', maxLength);
       const chunks: string[] = [];
       let currentText = text;
       while (currentText.length > 0) {
@@ -144,6 +146,8 @@ const useAudio = (isTtsEnabled: boolean, voice: string) => {
         chunks.push(currentText.substring(0, sliceIndex));
         currentText = currentText.substring(sliceIndex);
       }
+      console.log('[chunkText] Output chunks (lengths):', chunks.map(c => c.length));
+      console.log('[chunkText] Output chunks (content):', chunks);
       return chunks;
     };
 

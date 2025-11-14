@@ -147,7 +147,7 @@ const useAudio = (isTtsEnabled: boolean, voice: string) => {
       return chunks;
     };
 
-    const textChunks = chunkText(text, 185);
+    const textChunks = chunkText(text, 180);
 
     audioQueueRef.current.push(...textChunks.filter(s => s.trim().length > 0));
     if (!isSpeakingRef.current) {

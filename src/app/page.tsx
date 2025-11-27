@@ -691,6 +691,7 @@ export default function Home() {
           setIsCollapsed={setIsHistoryCollapsed}
           onNewChat={handleNewChat}
         />
+      </div>
       <div className="relative flex flex-1 flex-col bg-surface">
         <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
           <div className="flex items-center gap-2">

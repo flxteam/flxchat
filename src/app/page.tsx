@@ -459,9 +459,28 @@ export default function Home() {
   }, [input]);
 
   const handleNewChat = () => {
-    const newConversation: Conversation = { id: uuidv4(), title: `新对话 ${conversations.length + 1}`, messages: [] };
+    stopSpeaking();
+    const newConversation: Conversation = {
+      id: uuidv4(),
+      title: '新对话',
+      messages: [],
+      systemPrompt: systemPrompt,
+    };
     setConversations(prev => [...prev, newConversation]);
     setActiveConversationId(newConversation.id);
+    setIsHistoryCollapsed(false);
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    const updatedConversations = conversations.filter(c => c.id !== conversationId);
+    setConversations(updatedConversations);
+    if (activeConversationId === conversationId) {
+      if (updatedConversations.length > 0) {
+        setActiveConversationId(updatedConversations[0].id);
+      } else {
+        handleNewChat();
+      }
+    }
   };
 
   const handleStopGenerating = () => {
@@ -662,15 +681,16 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-background text-primary font-sans animate-fade-in">
-      <History 
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        setActiveConversationId={setActiveConversationId}
-        setConversations={setConversations}
-        isCollapsed={isHistoryCollapsed}
-        setIsCollapsed={setIsHistoryCollapsed}
-        onNewChat={handleNewChat}
-      />
+      <div className={`transition-all duration-300 ease-in-out ${isHistoryCollapsed ? 'w-0 md:w-16' : 'w-72'}`}>
+        <History
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          setActiveConversationId={setActiveConversationId}
+          onDeleteConversation={handleDeleteConversation}
+          isCollapsed={isHistoryCollapsed}
+          setIsCollapsed={setIsHistoryCollapsed}
+          onNewChat={handleNewChat}
+        />
       <div className="relative flex flex-1 flex-col bg-surface">
         <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
           <div className="flex items-center gap-2">

@@ -9,12 +9,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        'background': '#1a1a1a',
-        'surface': '#2a2a2a',
-        'primary': '#ffffff',
-        'secondary': '#b3b3b3',
-        'accent': '#3d8dff',
-        'border-color': '#3a3a3a',
+        'background': '#ffffff',
+        'surface': '#f2f2f2',
+        'primary': '#1a1a1a',
+        'secondary': '#666666',
+        'accent': '#f97316',
+        'accent-hover': '#ea580c',
+        'border-color': '#e5e5e5',
       },
       keyframes: {
         'fade-in': {

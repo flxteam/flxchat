@@ -12,3 +12,9 @@ export interface Conversation {
     title: string;
     messages: Message[];
 }
+
+export interface ThinkingMessage {
+  id: string;
+  role: 'assistant';
+  content: string;
+}

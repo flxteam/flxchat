@@ -674,7 +674,7 @@ export default function Home() {
       <div className="relative flex flex-1 flex-col bg-surface">
         <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
           <div className="flex items-center gap-2">
-            <img src="https://feli.qzz.io/favicon.ico" alt="FLXAI Logo" className="w-8 h-8 rounded-full" />
+            <img src="https://feli.qzz.io/favicon.ico" alt="FLXAI Logo" className="w-8 h-8" />
             <h1 className="text-xl font-bold text-primary">FLXChat</h1>
           </div>
           <div className="flex items-center gap-4">

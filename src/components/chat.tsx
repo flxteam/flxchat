@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { FiRefreshCw, FiEdit, FiTrash2 } from 'react-icons/fi';
-import Thinking from '@/components/Thinking';
+import Thinking from '@/components/thinking';
 import History from '@/components/History';
 
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {

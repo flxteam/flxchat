@@ -95,11 +95,10 @@ const MessageContent = ({ message, onRegenerate, onDelete, onSaveEdit }: {
   }
 
   return (
-    <div className="w-full group relative">
+    <div className="w-full group relative prose prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{ code: CodeBlock }}
-        className="prose prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none"
       >
         {message.content}
       </ReactMarkdown>

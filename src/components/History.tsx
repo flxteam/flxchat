@@ -7,13 +7,13 @@ interface HistoryProps {
   conversations: Conversation[];
   activeConversationId: string | null;
   setActiveConversationId: (id: string) => void;
-  setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  onDeleteConversation: (id: string) => void;
   isCollapsed: boolean;
   setIsCollapsed: (isCollapsed: boolean) => void;
   onNewChat: () => void;
 }
 
-const History = ({ conversations, activeConversationId, setActiveConversationId, setConversations, isCollapsed, setIsCollapsed, onNewChat }: HistoryProps) => {
+const History = ({ conversations, activeConversationId, setActiveConversationId, onDeleteConversation, isCollapsed, setIsCollapsed, onNewChat }: HistoryProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const historyRef = useRef<HTMLDivElement>(null);
@@ -25,17 +25,9 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
     }
   };
 
-  const handleDeleteConversation = (e: React.MouseEvent, id: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    const updatedConversations = conversations.filter(c => c.id !== id);
-    setConversations(updatedConversations);
-    if (activeConversationId === id) {
-      if (updatedConversations.length > 0) {
-        setActiveConversationId(updatedConversations[0].id);
-      } else {
-        onNewChat();
-      }
-    }
+    onDeleteConversation(id);
   };
 
   const handleStartEditing = (e: React.MouseEvent, conversation: Conversation) => {
@@ -120,7 +112,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
                 <button onClick={(e) => handleStartEditing(e, conversation)} className="p-1 text-secondary hover:text-primary rounded-full">
                   <FiEdit size={14} />
                 </button>
-                <button onClick={(e) => handleDeleteConversation(e, conversation.id)} className="p-1 text-red-500 hover:text-red-400 rounded-full">
+                <button onClick={(e) => handleDeleteClick(e, conversation.id)} className="p-1 text-red-500 hover:text-red-400 rounded-full">
                   <FiTrash2 size={14} />
                 </button>
               </div>

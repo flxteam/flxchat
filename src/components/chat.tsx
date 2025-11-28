@@ -726,6 +726,9 @@ export function Chat() {
       />
       <div className="relative flex flex-1 flex-col bg-surface">
         <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
+          <button onClick={() => setIsHistoryCollapsed(false)} className="md:hidden p-2 text-secondary hover:text-primary">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </button>
           <h1 className="text-xl font-bold text-primary">FLXChat</h1>
           <div className="flex items-center gap-4">
             <div className="relative">
@@ -834,4 +837,3 @@ export function Chat() {
       </div>
     </div>
   );
-}

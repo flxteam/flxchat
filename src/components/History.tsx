@@ -106,7 +106,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
                   {conversation.title}
                 </span>
               )}
-              <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                 <button onClick={(e) => handleStartEditing(e, conversation)} className="p-1 text-secondary hover:text-primary rounded-full">
                   <FiEdit size={14} />
                 </button>

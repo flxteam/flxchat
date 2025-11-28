@@ -687,7 +687,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-background text-primary font-sans animate-fade-in">
-      <div className={`transition-all duration-300 ease-in-out ${isHistoryCollapsed ? 'w-0 md:w-16' : 'w-72'}`}>
+      <div className={`hidden md:block transition-all duration-300 ease-in-out ${isHistoryCollapsed ? 'w-0 md:w-16' : 'w-72'}`}>
         <History
           conversations={conversations}
           activeConversationId={activeConversationId}
@@ -702,6 +702,9 @@ export default function Home() {
       <div className="relative flex flex-1 flex-col bg-surface">
         <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
           <div className="flex items-center gap-2">
+            <button onClick={() => setIsHistoryCollapsed(false)} className="md:hidden p-2 text-secondary hover:text-primary">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
             <img src="https://feli.qzz.io/favicon.ico" alt="FLXAI Logo" className="w-8 h-8" />
             <h1 className="text-xl font-bold text-primary">FLXChat</h1>
           </div>

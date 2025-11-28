@@ -8,12 +8,13 @@ interface HistoryProps {
   activeConversationId: string | null;
   setActiveConversationId: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onEditConversation: (id: string, newTitle: string) => void;
   isCollapsed: boolean;
   setIsCollapsed: (isCollapsed: boolean) => void;
   onNewChat: () => void;
 }
 
-const History = ({ conversations, activeConversationId, setActiveConversationId, onDeleteConversation, isCollapsed, setIsCollapsed, onNewChat }: HistoryProps) => {
+const History = ({ conversations, activeConversationId, setActiveConversationId, onDeleteConversation, onEditConversation, isCollapsed, setIsCollapsed, onNewChat }: HistoryProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const historyRef = useRef<HTMLDivElement>(null);
@@ -38,10 +39,7 @@ const History = ({ conversations, activeConversationId, setActiveConversationId,
 
   const handleStopEditing = (id: string) => {
     if (editingTitle.trim()) {
-      const updatedConversations = conversations.map(c => 
-        c.id === id ? { ...c, title: editingTitle.trim() } : c
-      );
-      setConversations(updatedConversations);
+      onEditConversation(id, editingTitle.trim());
     }
     setEditingId(null);
     setEditingTitle('');

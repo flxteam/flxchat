@@ -483,6 +483,12 @@ export default function Home() {
     }
   };
 
+  const handleEditConversation = (conversationId: string, newTitle: string) => {
+    setConversations(prevConvos =>
+      prevConvos.map(c => (c.id === conversationId ? { ...c, title: newTitle } : c))
+    );
+  };
+
   const handleStopGenerating = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -687,6 +693,7 @@ export default function Home() {
           activeConversationId={activeConversationId}
           setActiveConversationId={setActiveConversationId}
           onDeleteConversation={handleDeleteConversation}
+            onEditConversation={handleEditConversation}
           isCollapsed={isHistoryCollapsed}
           setIsCollapsed={setIsHistoryCollapsed}
           onNewChat={handleNewChat}

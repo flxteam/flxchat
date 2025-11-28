@@ -24,7 +24,6 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
-    }
   };
 
   return !inline && match ? (
@@ -115,6 +114,7 @@ const MessageContent = ({ message, onRegenerate, onDelete, onSaveEdit }: {
       )}
     </div>
   );
+}
 };
 
 const ThinkingIndicator = ({ text, isThinking, onToggle }: { text: string; isThinking: boolean; onToggle: () => void }) => (
@@ -837,3 +837,6 @@ export function Chat() {
       </div>
     </div>
   );
+}
+
+export default Chat;

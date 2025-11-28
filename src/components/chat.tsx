@@ -698,10 +698,6 @@ export function Chat() {
     setIsLoading(false);
   };
 
-  const handleSelectConversation = (conversationId: string) => {
-    setActiveConversationId(conversationId);
-  };
-
   const handleDeleteConversation = (conversationId: string) => {
     const newConversations = conversations.filter(c => c.id !== conversationId);
     setConversations(newConversations);
@@ -710,13 +706,20 @@ export function Chat() {
     }
   };
 
+  const handleEditConversation = (conversationId: string, newTitle: string) => {
+    setConversations(prevConvos =>
+      prevConvos.map(c => (c.id === conversationId ? { ...c, title: newTitle } : c))
+    );
+  };
+
   return (
     <div className="flex h-screen bg-background text-primary font-sans animate-fade-in">
       <History 
         conversations={conversations}
         activeConversationId={activeConversationId}
-        onSelectConversation={handleSelectConversation}
+        setActiveConversationId={setActiveConversationId}
         onDeleteConversation={handleDeleteConversation}
+        onEditConversation={handleEditConversation}
         isCollapsed={isHistoryCollapsed}
         setIsCollapsed={setIsHistoryCollapsed}
         onNewChat={handleNewChat}

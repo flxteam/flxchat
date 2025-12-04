@@ -840,3 +840,4 @@ export function Chat() {
       </div>
     </div>
   );
+}

@@ -829,7 +829,7 @@ export function Chat() {
                     <button type="button" onClick={() => setModalSystemPrompt('')} className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">清除</button>
                   </div>
                   <div className="flex gap-4">
-                    <button onClick={handleClosePromptModal} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">取消</button>
+                    <button onClick={handleClosePromptModal} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lggit ad transition-colors">取消</button>
                     <button onClick={handleSavePrompt} className="bg-accent hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">保存</button>
                   </div>
                 </div>

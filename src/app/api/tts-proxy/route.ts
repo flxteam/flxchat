@@ -1,7 +1,8 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest) {
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const text = searchParams.get('text');

@@ -440,6 +440,22 @@ export function Chat() {
     );
   };
 
+  const handleSaveEdit = (messageId: string, content: string) => {
+    if (!activeConversationId) return;
+    setConversations(prev =>
+      prev.map(c =>
+        c.id === activeConversationId
+          ? {
+              ...c,
+              messages: c.messages.map(m =>
+                m.id === messageId ? { ...m, content } : m
+              ),
+            }
+          : c
+      )
+    );
+  };
+
   const handleDeleteConversation = (conversationId: string) => {
     const newConversations = conversations.filter(c => c.id !== conversationId);
     setConversations(newConversations);

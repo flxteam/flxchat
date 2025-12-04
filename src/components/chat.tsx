@@ -821,13 +821,13 @@ export function Chat() {
             <div className="flex-1 relative">
               {attachments.length > 0 && (
                 <div className="p-2 bg-surface-dp2 rounded-t-md flex flex-wrap gap-2">
-                  {attachments.map((file, index) => (
+                  {attachments.map((attachment, index) => (
                     <div key={index} className="relative group bg-surface-dp3 rounded-md p-1">
-                      {file.type.startsWith('image/') ? (
-                        <img src={URL.createObjectURL(file)} alt={file.name} className="h-16 w-16 object-cover rounded-md" />
+                      {attachment.file.type.startsWith('image/') ? (
+                        <img src={attachment.preview} alt={attachment.file.name} className="h-16 w-16 object-cover rounded-md" />
                       ) : (
                         <div className="h-16 w-16 flex flex-col items-center justify-center bg-surface-dp4 rounded-md">
-                          <span className="text-xs text-text-secondary truncate w-full px-1 text-center">{file.name}</span>
+                          <span className="text-xs text-text-secondary truncate w-full px-1 text-center">{attachment.file.name}</span>
                         </div>
                       )}
                       <button

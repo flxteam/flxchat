@@ -251,6 +251,32 @@ export function Chat() {
   const isInitialLoad = useRef(true);
   const { speak, stop } = useAudio(isTtsEnabled, ttsVoice);
 
+  const onRegenerate = (messageId: string) => {
+    const activeConversation = conversations.find(c => c.id === activeConversationId);
+    if (!activeConversation) return;
+
+    const messageIndex = activeConversation.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const messageToRegenerate = activeConversation.messages[messageIndex];
+    if (messageToRegenerate.role !== 'user') return;
+
+    const newMessages = activeConversation.messages.slice(0, messageIndex + 1);
+
+    setConversations(conversations.map(c => 
+      c.id === activeConversationId ? { ...c, messages: newMessages } : c
+    ));
+
+    setInput(messageToRegenerate.content);
+    // Use a timeout to ensure the state update is processed before submitting
+    setTimeout(() => {
+      if (formRef.current) {
+        const event = new Event('submit', { bubbles: true, cancelable: true });
+        formRef.current.dispatchEvent(event);
+      }
+    }, 0);
+  };
+
   useEffect(() => {
     if (isInitialLoad.current) {
       try {
@@ -773,18 +799,15 @@ export function Chat() {
                       A
                     </div>
                   )}
-                  <div className={`p-3 rounded-lg ${ message.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-surface-dp2 text-text-primary rounded-bl-none' }`}>
-                    {message.role === 'user' && (
-                      <div className="absolute -bottom-2 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => onRegenerate(message.id)} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiRefreshCw size={14} /></button>
-                      </div>
-                    )}
-                    {message.role === 'user' && (
-                       <div className="absolute -bottom-2 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={handleStartEdit} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiEdit size={14} /></button>
-                        <button onClick={() => onDelete(message.id)} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiTrash2 size={14} /></button>
-                      </div>
-                    )}
+                  <div key={message.id} className={`w-full flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`relative max-w-full sm:max-w-[85%] md:max-w-[80%] lg:max-w-[75%] px-3 sm:px-4 py-2 rounded-2xl ${message.role === 'user' ? 'bg-accent text-white rounded-br-none' : 'bg-surface text-primary rounded-bl-none'}`}>
+                      <MessageContent 
+                        message={message} 
+                        onRegenerate={onRegenerate}
+                        onDelete={handleDeleteMessage} 
+                        onSaveEdit={handleSaveEdit} 
+                      />
+                    </div>
                   </div>
                 </motion.div>
               ))}

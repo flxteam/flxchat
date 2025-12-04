@@ -24,6 +24,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
       setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       console.error('Failed to copy text: ', err);
+    }
   };
 
   return !inline && match ? (
@@ -114,7 +115,6 @@ const MessageContent = ({ message, onRegenerate, onDelete, onSaveEdit }: {
       )}
     </div>
   );
-}
 };
 
 const ThinkingIndicator = ({ text, isThinking, onToggle }: { text: string; isThinking: boolean; onToggle: () => void }) => (
@@ -725,15 +725,12 @@ export function Chat() {
         onNewChat={handleNewChat}
       />
       <div className="relative flex flex-1 flex-col bg-surface">
-        <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-4 flex justify-between items-center gap-4 z-10">
-          <button onClick={() => setIsHistoryCollapsed(false)} className="md:hidden p-2 text-secondary hover:text-primary">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-          </button>
+        <header className="bg-background/80 backdrop-blur-sm border-b border-border-color p-2 sm:p-4 flex justify-between items-center gap-2 sm:gap-4 z-10">
           <h1 className="text-xl font-bold text-primary">FLXChat</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <div className="relative">
-              <button onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)} className="px-4 py-2 bg-surface rounded-md hover:bg-gray-700 transition-colors text-sm flex items-center gap-2">
-                {MODELS.find(m => m.id === modelId)?.name || 'Select Model'}
+              <button onClick={() => setIsModelSelectorOpen(!isModelSelectorOpen)} className="px-3 py-2 bg-surface rounded-md hover:bg-gray-700 transition-colors text-sm flex items-center gap-2">
+                <span className="truncate max-w-[120px] sm:max-w-none">{MODELS.find(m => m.id === modelId)?.name || 'Select Model'}</span>
                 <svg className={`w-4 h-4 transition-transform ${isModelSelectorOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
               </button>
               <AnimatePresence>
@@ -791,17 +788,20 @@ export function Chat() {
           </div>
         </main>
 
-        <footer className="bg-background/80 backdrop-blur-sm border-t border-border-color p-4">
-          <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <div className="flex items-center justify-between text-sm text-secondary">
-              <div className="flex items-center gap-6">
+        <footer className="bg-background/80 backdrop-blur-sm border-t border-border-color p-2 sm:p-4">
+          <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2 sm:gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm text-secondary">
+              <div className="flex items-center gap-2 sm:gap-6 flex-wrap">
                 <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer"><input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">思考模式</span></label>
                 <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer"><input id="tts-mode" type="checkbox" className="sr-only peer" checked={isTtsEnabled} onChange={(e) => setIsTtsEnabled(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">语音播报</span></label>
                 <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}><input id="search-mode" type="checkbox" className="sr-only peer" checked={useSearch} onChange={(e) => setUseSearch(e.target.checked)} disabled={attachments.length > 0 || !['Qwen/Qwen2-7B-Instruct', 'meta-llama/Meta-Llama-3.1-8B-Instruct', 'THUDM/glm-4-9b-chat', 'deepseek-ai/DeepSeek-V2-Chat'].includes(modelId)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">网络搜索</span></label>
               </div>
-              <button type="button" onClick={handleOpenPromptModal} disabled={isLoading} className="bg-surface hover:bg-gray-700 text-primary font-medium py-2 px-4 rounded-lg text-sm whitespace-nowrap disabled:opacity-50 transition-colors">自定义提示词</button>
+              <button type="button" onClick={handleOpenPromptModal} disabled={isLoading} className="w-full sm:w-auto bg-surface hover:bg-gray-700 text-primary font-medium py-2 px-3 sm:px-4 rounded-lg text-sm disabled:opacity-50 transition-colors">自定义提示词</button>
             </div>
-            {attachments.length > 0 && (<div className="flex flex-wrap gap-2">{attachments.map((attachment, index) => (<div key={index} className="relative"><img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" /><button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs" style={{ transform: 'translate(50%, -50%)' }}>X</button></div>))}</div>)}
+            {attachments.length > 0 && (<div className="flex flex-wrap gap-2">
+              {attachments.map((attachment, index) => (
+                <div key={index} className="relative">
+                  <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" /><button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs" style={{ transform: 'translate(50%, -50%)' }}>X</button></div>))}</div>)}
             <div className="relative w-full flex items-center bg-background rounded-xl border border-border-color focus-within:ring-2 focus-within:ring-accent transition-all">
               {['THUDM/glm-4-9b-chat', 'Kwai-Kolors/Kolors', 'meta-llama/Meta-Llama-3.1-8B-Instruct'].includes(modelId) && (<button type="button" onClick={() => (document.getElementById('file-upload') as HTMLInputElement)?.click()} disabled={isLoading} className="p-3 text-secondary hover:text-primary disabled:opacity-50" title="上传附件"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>)}
               <input type="file" id="file-upload" multiple accept="image/*" onChange={async (e) => { if (e.target.files) { const fileList = Array.from(e.target.files); const compressedFiles = await Promise.all(fileList.map(async (file) => ({ file, preview: await compressImage(file) }))); setAttachments(prev => [...prev, ...compressedFiles]); } }} className="hidden" />
@@ -819,7 +819,7 @@ export function Chat() {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
               <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} className="bg-surface rounded-lg shadow-xl p-6 w-full max-w-2xl border border-border-color">
                 <h2 className="text-xl font-bold mb-4 text-primary">自定义系统提示词</h2>
-                <textarea placeholder="告诉 AI 如何表现，例如：你是一个代码专家，请用中文回答。" value={modalSystemPrompt} onChange={(e) => setModalSystemPrompt(e.target.value)} className="w-full p-3 bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-accent text-base resize-y border border-border-color" rows={10} />
+                <textarea placeholder="告诉 FLXAI 如何表现，例如：你是一个代码专家，请用中文回答。" value={modalSystemPrompt} onChange={(e) => setModalSystemPrompt(e.target.value)} className="w-full p-3 bg-background rounded-lg focus:outline-none focus:ring-2 focus:ring-accent text-base resize-y border border-border-color" rows={10} />
                 <div className="flex justify-between items-center mt-6">
                   <div>
                     <button type="button" onClick={handleResetPrompt} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg mr-2 transition-colors">复位</button>
@@ -837,6 +837,3 @@ export function Chat() {
       </div>
     </div>
   );
-}
-
-export default Chat;

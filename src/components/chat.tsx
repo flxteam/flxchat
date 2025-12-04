@@ -12,6 +12,12 @@ import { FiRefreshCw, FiEdit, FiTrash2, FiPaperclip, FiMic, FiSend } from 'react
 import Thinking from '@/components/thinking';
 import History from '@/components/History';
 
+interface ChatProps {
+  onRegenerate: (messageId: string) => void;
+  onDelete: (messageId: string) => void;
+  onSaveEdit: (messageId: string, newContent: string) => void;
+}
+
 const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
   const [isCopied, setIsCopied] = useState(false);
   const match = /language-(\w+)/.exec(className || '');
@@ -48,7 +54,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
       </SyntaxHighlighter>
     </div>
   ) : (
-    <code className={`${className} bg-gray-700 text-white rounded-md px-1 py-0.5 text-sm font-mono`}>
+    <code className={className} {...props}>
       {children}
     </code>
   );
@@ -140,7 +146,7 @@ const useAudio = (isTtsEnabled: boolean, voice: string) => {
   const isSpeakingRef = useRef(false);
   const audioQueueRef = useRef<string[]>([]);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
-
+  
   const processQueue = useCallback(async () => {
     if (isSpeakingRef.current || audioQueueRef.current.length === 0 || !isTtsEnabled) {
       return;
@@ -228,7 +234,7 @@ const VOICES = [
   { id: '曼波', name: '曼波' },
 ];
 
-export function Chat() {
+export default function Chat({ onRegenerate, onDelete }: ChatProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -242,7 +248,7 @@ export function Chat() {
   const [isTtsEnabled, setIsTtsEnabled] = useState(true);
   const [ttsVoice, setTtsVoice] = useState('体虚生');
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false);
-  const [attachments, setAttachments] = useState<{ file: File; preview: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ file: File; preview: string; type: string }[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const [systemPrompt, setSystemPrompt] = useState(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
@@ -250,32 +256,6 @@ export function Chat() {
   const formRef = useRef<HTMLFormElement>(null);
   const isInitialLoad = useRef(true);
   const { speak, stop } = useAudio(isTtsEnabled, ttsVoice);
-
-  const onRegenerate = (messageId: string) => {
-    const activeConversation = conversations.find(c => c.id === activeConversationId);
-    if (!activeConversation) return;
-
-    const messageIndex = activeConversation.messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return;
-
-    const messageToRegenerate = activeConversation.messages[messageIndex];
-    if (messageToRegenerate.role !== 'user') return;
-
-    const newMessages = activeConversation.messages.slice(0, messageIndex + 1);
-
-    setConversations(conversations.map(c => 
-      c.id === activeConversationId ? { ...c, messages: newMessages } : c
-    ));
-
-    setInput(messageToRegenerate.content);
-    // Use a timeout to ensure the state update is processed before submitting
-    setTimeout(() => {
-      if (formRef.current) {
-        const event = new Event('submit', { bubbles: true, cancelable: true });
-        formRef.current.dispatchEvent(event);
-      }
-    }, 0);
-  };
 
   useEffect(() => {
     if (isInitialLoad.current) {
@@ -398,21 +378,322 @@ export function Chat() {
     setModalSystemPrompt(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
   };
 
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments(attachments.filter((_, i) => i !== index));
+  const handleRegenerate = async (messageId: string) => {
+    stop();
+    if (!activeConversationId || isLoading) return;
+    const currentConversation = conversations.find(c => c.id === activeConversationId);
+    if (!currentConversation) return;
+    const messageIndex = currentConversation.messages.findIndex(m => m.id === messageId);
+    if (messageIndex < 1) return;
+    const messagesForApi = currentConversation.messages.slice(0, messageIndex);
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '重新思考中...' };
+    setConversations(prevConvos => prevConvos.map(c => c.id === activeConversationId ? { ...c, messages: [...messagesForApi, assistantPlaceholder] } : c));
+    await fetchAndStreamResponse(messagesForApi, []);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files).map(file => ({
-        file,
-        preview: URL.createObjectURL(file),
-      }));
-      setAttachments(prev => [...prev, ...newFiles]);
-      // Reset the input value to allow selecting the same file again
-      e.target.value = '';
+  const handleDeleteMessage = (messageId: string) => {
+    if (!activeConversationId) return;
+    setConversations(convos => convos.map(c => {
+      if (c.id === activeConversationId) {
+        const messageIndex = c.messages.findIndex(m => m.id === messageId);
+        if (messageIndex !== -1) {
+          return { ...c, messages: c.messages.slice(0, messageIndex) };
+        }
+      }
+      return c;
+    }));
+  };
+
+  const handleEditConversation = (conversationId: string, newTitle: string) => {
+    setConversations(prevConvos =>
+      prevConvos.map(c => (c.id === conversationId ? { ...c, title: newTitle } : c))
+    );
+  };
+
+    const handleSaveEdit = async (messageId: string, newContent: string) => {
+    if (!activeConversationId || isLoading) return;
+    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
+    if (!convoToUpdate) return;
+
+    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex);
+    const editedUserMessage: Message = { ...convoToUpdate.messages[messageIndex], content: newContent };
+    newMessages.push(editedUserMessage);
+
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '编辑后重新思考中...' };
+    newMessages.push(assistantPlaceholder);
+
+    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages } : c));
+
+    await fetchAndStreamResponse(newMessages.slice(0, -1), []);
+  };
+
+  const fetchAndStreamResponse = async (messagesForApi: Message[], files: File[]) => {
+    setIsLoading(true);
+    abortControllerRef.current = new AbortController();
+
+    const formData = new FormData();
+    formData.append('messages', JSON.stringify(messagesForApi));
+    formData.append('modelId', modelId);
+    formData.append('systemPrompt', systemPrompt);
+    formData.append('useSearch', JSON.stringify(useSearch));
+    formData.append('useThinkingMode', JSON.stringify(useThinkingMode));
+    files.forEach(file => formData.append('files', file));
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        body: formData,
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const rawData = line.substring(6);
+            if (rawData === '[DONE]') {
+              setIsLoading(false);
+              return;
+            }
+            try {
+              const parsed = JSON.parse(rawData);
+              if (parsed.type === 'thinking') {
+                setConversations(prevConvos =>
+                  prevConvos.map(c => {
+                    if (c.id === activeConversationId) {
+                      const lastMessage = c.messages[c.messages.length - 1];
+                      if (lastMessage && lastMessage.role === 'assistant') {
+                        return {
+                          ...c,
+                          messages: [
+                            ...c.messages.slice(0, -1),
+                            { ...lastMessage, thinking: (lastMessage.thinking || '') + parsed.content },
+                          ],
+                        };
+                      }
+                    }
+                    return c;
+                  })
+                );
+              } else if (parsed.type === 'chunk') {
+                setConversations(prevConvos =>
+                  prevConvos.map(c => {
+                    if (c.id === activeConversationId) {
+                      const lastMessage = c.messages[c.messages.length - 1];
+                      if (lastMessage && lastMessage.role === 'assistant') {
+                        const newContent = lastMessage.content + parsed.content;
+                        speak(parsed.content);
+                        return {
+                          ...c,
+                          messages: [
+                            ...c.messages.slice(0, -1),
+                            { ...lastMessage, content: newContent },
+                          ],
+                        };
+                      }
+                    }
+                    return c;
+                  })
+                );
+              }
+            } catch (e) {
+              console.error('Error parsing stream data:', e);
+            }
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error fetching stream:', error);
+        setConversations(prevConvos =>
+          prevConvos.map(c => {
+            if (c.id === activeConversationId) {
+              const lastMessage = c.messages[c.messages.length - 1];
+              if (lastMessage && lastMessage.role === 'assistant') {
+                return {
+                  ...c,
+                  messages: [
+                    ...c.messages.slice(0, -1),
+                    { ...lastMessage, content: `发生错误: ${error.message}` },
+                  ],
+                };
+              }
+            }
+            return c;
+          })
+        );
+      }
+    } finally {
+      setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() && attachments.length === 0) return;
+
+    stop();
+
+    const userMessage: Message = { id: uuidv4(), role: 'user', content: input };
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '思考中...' };
+
+    let messagesForApi: Message[];
+    if (activeConversation && activeConversation.messages.length > 0) {
+      setConversations(prevConvos =>
+        prevConvos.map(c =>
+          c.id === activeConversationId
+            ? { ...c, messages: [...c.messages, userMessage, assistantPlaceholder] }
+            : c
+        )
+      );
+      messagesForApi = [...activeConversation.messages, userMessage];
+    } else {
+      const newConversation: Conversation = {
+        id: activeConversationId || uuidv4(),
+        title: input.substring(0, 20) || '新对话',
+        messages: [userMessage, assistantPlaceholder],
+        systemPrompt: systemPrompt,
+      };
+      if (!conversations.find(c => c.id === newConversation.id)) {
+        setConversations(prev => [...prev, newConversation]);
+      } else {
+        setConversations(prev => prev.map(c => c.id === newConversation.id ? newConversation : c));
+      }
+      setActiveConversationId(newConversation.id);
+      messagesForApi = [userMessage];
+    }
+
+    setInput('');
+    setAttachments([]);
+
+    await fetchAndStreamResponse(messagesForApi, attachments.map(a => a.file));
+  };
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleStartRecording = async () => {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current.ondataavailable = (event) => audioChunksRef.current.push(event.data);
+        mediaRecorderRef.current.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          await handleSendAudio(audioBlob);
+          stream.getTracks().forEach(track => track.stop());
+        };
+        audioChunksRef.current = [];
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Error accessing microphone:", err);
+        alert("无法访问麦克风，请检查权限。");
+      }
+    } else {
+      alert("您的浏览器不支持录音功能。");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleSendAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    const formData = new FormData();
+    formData.append("file", audioBlob, "recording.webm");
+    try {
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '语音识别失败');
+      }
+      const data = await response.json();
+      setInput(prevInput => prevInput + data.text);
+      // Automatically submit after transcription
+      setTimeout(() => formRef.current?.requestSubmit(), 100);
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      if (input.trim() && !isLoading) formRef.current?.requestSubmit();
+    }
+  };
+
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(img.src);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Failed to get canvas context'));
+        let { width, height } = img;
+        const MAX_DIM = 2048;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width > height) {
+            height *= MAX_DIM / width;
+            width = MAX_DIM;
+          } else {
+            width *= MAX_DIM / height;
+            height = MAX_DIM;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.9));
+      };
+      img.onerror = (err) => {
+        URL.revokeObjectURL(img.src);
+        reject(err);
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [input]);
 
   const handleNewChat = () => {
     const newConversation: Conversation = { id: uuidv4(), title: `新对话 ${conversations.length + 1}`, messages: [] };
@@ -429,33 +710,6 @@ export function Chat() {
     setIsLoading(false);
   };
 
-  const handleDeleteMessage = (messageId: string) => {
-    if (!activeConversationId) return;
-    setConversations(prev =>
-      prev.map(c =>
-        c.id === activeConversationId
-          ? { ...c, messages: c.messages.filter(m => m.id !== messageId) }
-          : c
-      )
-    );
-  };
-
-  const handleSaveEdit = (messageId: string, content: string) => {
-    if (!activeConversationId) return;
-    setConversations(prev =>
-      prev.map(c =>
-        c.id === activeConversationId
-          ? {
-              ...c,
-              messages: c.messages.map(m =>
-                m.id === messageId ? { ...m, content } : m
-              ),
-            }
-          : c
-      )
-    );
-  };
-
   const handleDeleteConversation = (conversationId: string) => {
     const newConversations = conversations.filter(c => c.id !== conversationId);
     setConversations(newConversations);
@@ -464,10 +718,56 @@ export function Chat() {
     }
   };
 
-  const handleEditConversation = (conversationId: string, newTitle: string) => {
-    setConversations(prevConvos =>
-      prevConvos.map(c => (c.id === conversationId ? { ...c, title: newTitle } : c))
-    );
+    const onSaveEdit = async (messageId: string, newContent: string) => {
+    if (!activeConversationId || isLoading) return;
+    const convoToUpdate = conversations.find(c => c.id === activeConversationId);
+    if (!convoToUpdate) return;
+
+    const messageIndex = convoToUpdate.messages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const newMessages = convoToUpdate.messages.slice(0, messageIndex);
+    const editedUserMessage: Message = { ...convoToUpdate.messages[messageIndex], content: newContent };
+    newMessages.push(editedUserMessage);
+
+    const assistantPlaceholder: Message = { id: uuidv4(), role: 'assistant', content: '', thinking: '编辑后重新思考中...' };
+    newMessages.push(assistantPlaceholder);
+
+    setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages } : c));
+
+    await fetchAndStreamResponse(newMessages.slice(0, -1), []);
+  };
+
+  const handleStartEdit = (messageId: string) => {
+    // This function is now handled within MessageContent
+  };
+
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      const newAttachments = await Promise.all(
+        newFiles.map(async file => {
+          let preview = '';
+          if (file.type.startsWith('image/')) {
+            preview = await compressImage(file);
+          }
+          return { file, preview, type: file.type };
+        })
+      );
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const startRecording = () => {
+    handleStartRecording();
+  };
+
+  const stopRecording = () => {
+    handleStopRecording();
   };
 
   return (
@@ -531,15 +831,13 @@ export function Chat() {
                       A
                     </div>
                   )}
-                  <div key={message.id} className={`w-full flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`relative max-w-full sm:max-w-[85%] md:max-w-[80%] lg:max-w-[75%] px-3 sm:px-4 py-2 rounded-2xl ${message.role === 'user' ? 'bg-accent text-white rounded-br-none' : 'bg-surface text-primary rounded-bl-none'}`}>
-                      <MessageContent 
-                        message={message} 
-                        onRegenerate={onRegenerate}
-                        onDelete={handleDeleteMessage} 
-                        onSaveEdit={handleSaveEdit} 
-                      />
-                    </div>
+                  <div className={`p-3 rounded-lg ${ message.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-surface-dp2 text-text-primary rounded-bl-none' }`}>
+                    <MessageContent
+                      message={message}
+                      onRegenerate={onRegenerate}
+                      onDelete={onDelete}
+                      onSaveEdit={onSaveEdit}
+                    />
                   </div>
                 </motion.div>
               ))}
@@ -549,13 +847,13 @@ export function Chat() {
         </main>
 
         <footer className="p-2 sm:p-4 bg-surface-dp1 rounded-b-lg shadow-inner">
-          <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3">
+          <form onSubmit={handleSubmit} ref={formRef} className="flex items-end gap-2 sm:gap-3">
             <div className="flex-1 relative">
               {attachments.length > 0 && (
                 <div className="p-2 bg-surface-dp2 rounded-t-md flex flex-wrap gap-2">
                   {attachments.map((attachment, index) => (
                     <div key={index} className="relative group bg-surface-dp3 rounded-md p-1">
-                      {attachment.file.type.startsWith('image/') ? (
+                      {attachment.type.startsWith('image/') ? (
                         <img src={attachment.preview} alt={attachment.file.name} className="h-16 w-16 object-cover rounded-md" />
                       ) : (
                         <div className="h-16 w-16 flex flex-col items-center justify-center bg-surface-dp4 rounded-md">
@@ -588,22 +886,22 @@ export function Chat() {
               </div>
             </div>
 
-            <button type="submit" disabled={isThinking || !input.trim() && attachments.length === 0} className="self-end bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-md disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-200">
+            <button type="submit" disabled={isLoading || !input.trim() && attachments.length === 0} className="self-end bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-md disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-200">
               <FiSend />
             </button>
           </form>
           <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-text-secondary">
             <div className="flex flex-col sm:flex-row items-center gap-2">
               <div className="flex items-center gap-1">
-                <input type="checkbox" id="tts-toggle" checked={isTTS} onChange={() => setIsTTS(!isTTS)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
+                <input type="checkbox" id="tts-toggle" checked={isTtsEnabled} onChange={() => setIsTtsEnabled(!isTtsEnabled)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
                 <label htmlFor="tts-toggle">语音合成</label>
               </div>
               <div className="flex items-center gap-1">
-                <input type="checkbox" id="internet-toggle" checked={useInternet} onChange={() => setUseInternet(!useInternet)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
+                <input type="checkbox" id="internet-toggle" checked={useSearch} onChange={() => setUseSearch(!useSearch)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
                 <label htmlFor="internet-toggle">联网</label>
               </div>
             </div>
-            <button onClick={() => setShowCustomPrompt(true)} className="w-full sm:w-auto bg-surface-dp3 hover:bg-surface-dp4 text-text-primary py-1 px-3 rounded-md transition-colors duration-200">
+            <button onClick={handleOpenPromptModal} className="w-full sm:w-auto bg-surface-dp3 hover:bg-surface-dp4 text-text-primary py-1 px-3 rounded-md transition-colors duration-200">
               自定义提示词
             </button>
           </div>

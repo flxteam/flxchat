@@ -429,6 +429,17 @@ export function Chat() {
     setIsLoading(false);
   };
 
+  const handleDeleteMessage = (messageId: string) => {
+    if (!activeConversationId) return;
+    setConversations(prev =>
+      prev.map(c =>
+        c.id === activeConversationId
+          ? { ...c, messages: c.messages.filter(m => m.id !== messageId) }
+          : c
+      )
+    );
+  };
+
   const handleDeleteConversation = (conversationId: string) => {
     const newConversations = conversations.filter(c => c.id !== conversationId);
     setConversations(newConversations);

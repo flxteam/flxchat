@@ -29,7 +29,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
 
   return !inline && match ? (
     <div className="relative group bg-surface rounded-lg my-2 text-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-800 rounded-t-lg">
+      <div className="flex items-center justify-between px-2 sm:px-4 py-2 bg-gray-800 rounded-t-lg">
         <span className="text-secondary text-xs font-sans">{match[1]}</span>
         <button 
           onClick={handleCopy}
@@ -48,7 +48,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: any) => {
       </SyntaxHighlighter>
     </div>
   ) : (
-    <code className={`text-accent ${className}`} {...props}>
+    <code className={`${className} bg-gray-700 text-white rounded-md px-1 py-0.5 text-sm font-mono`}>
       {children}
     </code>
   );
@@ -767,18 +767,23 @@ export function Chat() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className={`flex items-start gap-4 p-4 my-2 rounded-xl ${message.role === 'user' ? 'bg-surface' : 'bg-surface-variant'}`}>
-                  <div className={`w-8 h-8 rounded-full flex-shrink-0 ${message.role === 'user' ? 'bg-accent' : 'bg-primary'}`}></div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="font-bold text-primary">{message.role === 'user' ? '你' : 'FLX助理'}</div>
-                    <MessageContent 
-                      message={message} 
-                      onRegenerate={handleRegenerate} 
-                      onDelete={handleDeleteMessage}
-                      onSaveEdit={handleSaveEdit}
-                    />
-                    {message.role === 'assistant' && message.thinking && (
-                      <Thinking thinking={message.thinking} />
+                  className={`flex items-start gap-2 sm:gap-3 max-w-[90%]`}>
+                  {message.role === 'assistant' && (
+                    <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      A
+                    </div>
+                  )}
+                  <div className={`p-3 rounded-lg ${ message.role === 'user' ? 'bg-primary text-white rounded-br-none' : 'bg-surface-dp2 text-text-primary rounded-bl-none' }`}>
+                    {message.role === 'user' && (
+                      <div className="absolute -bottom-2 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => onRegenerate(message.id)} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiRefreshCw size={14} /></button>
+                      </div>
+                    )}
+                    {message.role === 'user' && (
+                       <div className="absolute -bottom-2 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={handleStartEdit} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiEdit size={14} /></button>
+                        <button onClick={() => onDelete(message.id)} className="p-1 rounded-full hover:bg-white/10 text-secondary hover:text-primary"><FiTrash2 size={14} /></button>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -788,33 +793,65 @@ export function Chat() {
           </div>
         </main>
 
-        <footer className="bg-background/80 backdrop-blur-sm border-t border-border-color p-2 sm:p-4">
-          <form ref={formRef} onSubmit={handleSubmit} className="flex flex-col gap-2 sm:gap-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm text-secondary">
-              <div className="flex items-center gap-2 sm:gap-6 flex-wrap">
-                <label htmlFor="thinking-mode" className="inline-flex items-center cursor-pointer"><input id="thinking-mode" type="checkbox" className="sr-only peer" checked={useThinkingMode} onChange={(e) => setUseThinkingMode(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">思考模式</span></label>
-                <label htmlFor="tts-mode" className="inline-flex items-center cursor-pointer"><input id="tts-mode" type="checkbox" className="sr-only peer" checked={isTtsEnabled} onChange={(e) => setIsTtsEnabled(e.target.checked)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">语音播报</span></label>
-                <label htmlFor="search-mode" className={`inline-flex items-center cursor-pointer ${attachments.length > 0 ? 'opacity-50 cursor-not-allowed' : ''}`}><input id="search-mode" type="checkbox" className="sr-only peer" checked={useSearch} onChange={(e) => setUseSearch(e.target.checked)} disabled={attachments.length > 0 || !['Qwen/Qwen2-7B-Instruct', 'meta-llama/Meta-Llama-3.1-8B-Instruct', 'THUDM/glm-4-9b-chat', 'deepseek-ai/DeepSeek-V2-Chat'].includes(modelId)} /><div className="relative w-11 h-6 bg-surface rounded-full peer peer-focus:ring-2 peer-focus:ring-accent peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div><span className="ms-3 text-sm font-medium text-primary">网络搜索</span></label>
-              </div>
-              <button type="button" onClick={handleOpenPromptModal} disabled={isLoading} className="w-full sm:w-auto bg-surface hover:bg-gray-700 text-primary font-medium py-2 px-3 sm:px-4 rounded-lg text-sm disabled:opacity-50 transition-colors">自定义提示词</button>
-            </div>
-            {attachments.length > 0 && (<div className="flex flex-wrap gap-2">
-              {attachments.map((attachment, index) => (
-                <div key={index} className="relative">
-                  <img src={attachment.preview} alt={`preview ${index}`} className="h-20 w-20 object-cover rounded-lg" /><button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} className="absolute top-0 right-0 bg-red-600 text-white rounded-full p-1 text-xs" style={{ transform: 'translate(50%, -50%)' }}>X</button>
+        <footer className="p-2 sm:p-4 bg-surface-dp1 rounded-b-lg shadow-inner">
+          <form onSubmit={handleSubmit} className="flex items-end gap-2 sm:gap-3">
+            <div className="flex-1 relative">
+              {attachments.length > 0 && (
+                <div className="p-2 bg-surface-dp2 rounded-t-md flex flex-wrap gap-2">
+                  {attachments.map((file, index) => (
+                    <div key={index} className="relative group bg-surface-dp3 rounded-md p-1">
+                      {file.type.startsWith('image/') ? (
+                        <img src={URL.createObjectURL(file)} alt={file.name} className="h-16 w-16 object-cover rounded-md" />
+                      ) : (
+                        <div className="h-16 w-16 flex flex-col items-center justify-center bg-surface-dp4 rounded-md">
+                          <span className="text-xs text-text-secondary truncate w-full px-1 text-center">{file.name}</span>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleRemoveAttachment(index)}
+                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>)}
-            <div className="relative w-full flex items-center bg-background rounded-xl border border-border-color focus-within:ring-2 focus-within:ring-accent transition-all">
-              {['THUDM/glm-4-9b-chat', 'Kwai-Kolors/Kolors', 'meta-llama/Meta-Llama-3.1-8B-Instruct'].includes(modelId) && (<button type="button" onClick={() => (document.getElementById('file-upload') as HTMLInputElement)?.click()} disabled={isLoading} className="p-3 text-secondary hover:text-primary disabled:opacity-50" title="上传附件"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg></button>)}
-              <input type="file" id="file-upload" multiple accept="image/*" onChange={async (e) => { if (e.target.files) { const fileList = Array.from(e.target.files); const compressedFiles = await Promise.all(fileList.map(async (file) => ({ file, preview: await compressImage(file) }))); setAttachments(prev => [...prev, ...compressedFiles]); } }} className="hidden" />
-              <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={isRecording ? "正在聆听..." : (isTranscribing ? "正在识别..." : "输入消息...")} className="w-full p-3 bg-transparent text-primary rounded-lg focus:outline-none resize-none disabled:opacity-50 max-h-40 overflow-y-auto" rows={1} disabled={isLoading || isTranscribing} />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
-                <button type="button" onMouseDown={handleStartRecording} onMouseUp={handleStopRecording} onTouchStart={handleStartRecording} onTouchEnd={handleStopRecording} disabled={isLoading || isTranscribing} className={`p-2 rounded-full transition-all duration-200 ${isRecording ? 'bg-red-500 text-white scale-110' : 'text-secondary hover:text-primary hover:bg-surface'}`}>{isTranscribing ? (<div className="w-5 h-5 border-t-2 border-accent rounded-full animate-spin"></div>) : (<svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.49 6-3.31 6-6.72h-1.7z"/></svg>)}</button>
-                {isLoading ? (<button type="button" onClick={handleStopGenerating} className="p-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors duration-200 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg></button>) : (<button type="submit" disabled={!input.trim() || isTranscribing} className="p-2 rounded-full bg-accent text-white hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>)}
+              )}
+              <textarea
+                placeholder="输入消息... (Shift + Enter 换行)"
+                className="w-full p-3 pr-28 bg-surface-dp2 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary transition-shadow duration-200 text-sm placeholder-text-secondary"
+                style={{ minHeight: '52px', maxHeight: '200px' }}
+              />
+              <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                <label htmlFor="file-upload" className="cursor-pointer p-2 rounded-full hover:bg-surface-dp3">
+                  <FiPaperclip className="text-text-secondary" />
+                </label>
+                <input id="file-upload" type="file" multiple onChange={handleFileChange} className="hidden" />
+                <button type="button" onClick={isRecording ? stopRecording : startRecording} className={`p-2 rounded-full ${isRecording ? 'bg-red-500 text-white' : 'hover:bg-surface-dp3'}`}>
+                  <FiMic className={`text-text-secondary ${isRecording ? 'text-white' : ''}`} />
+                </button>
               </div>
             </div>
+
+            <button type="submit" disabled={isThinking || !input.trim() && attachments.length === 0} className="self-end bg-primary hover:bg-primary-dark text-white font-bold py-3 px-4 rounded-md disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors duration-200">
+              <FiSend />
+            </button>
           </form>
+          <div className="mt-2 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-text-secondary">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <div className="flex items-center gap-1">
+                <input type="checkbox" id="tts-toggle" checked={isTTS} onChange={() => setIsTTS(!isTTS)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
+                <label htmlFor="tts-toggle">语音合成</label>
+              </div>
+              <div className="flex items-center gap-1">
+                <input type="checkbox" id="internet-toggle" checked={useInternet} onChange={() => setUseInternet(!useInternet)} className="form-checkbox h-4 w-4 text-primary bg-surface-dp3 rounded focus:ring-primary" />
+                <label htmlFor="internet-toggle">联网</label>
+              </div>
+            </div>
+            <button onClick={() => setShowCustomPrompt(true)} className="w-full sm:w-auto bg-surface-dp3 hover:bg-surface-dp4 text-text-primary py-1 px-3 rounded-md transition-colors duration-200">
+              自定义提示词
+            </button>
+          </div>
         </footer>
 
         <AnimatePresence>

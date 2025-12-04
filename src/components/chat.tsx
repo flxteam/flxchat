@@ -398,6 +398,10 @@ export function Chat() {
     setModalSystemPrompt(`你叫FLX助理，由FLXTeam开发，是 FELIX 的专属AI助手。`);
   };
 
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(attachments.filter((_, i) => i !== index));
+  };
+
   const handleRegenerate = async (messageId: string) => {
     stop();
     if (!activeConversationId || isLoading) return;
@@ -708,7 +712,7 @@ export function Chat() {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [input]);
-
+  
   const handleNewChat = () => {
     const newConversation: Conversation = { id: uuidv4(), title: `新对话 ${conversations.length + 1}`, messages: [] };
     setConversations(prev => [...prev, newConversation]);

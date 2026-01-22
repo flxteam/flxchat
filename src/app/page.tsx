@@ -337,6 +337,11 @@ export default function Home() {
     }));
   };
 
+
+  const handleStartEdit = (message: Message) => {
+    setEditingMessage(message);
+  };
+
   const handleSaveEdit = async (messageId: string, newContent: string) => {
     if (!activeConversationId || isLoading) return;
     const convoToUpdate = conversations.find(c => c.id === activeConversationId);
